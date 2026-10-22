@@ -1,0 +1,29 @@
+name: Verificar RodaCaixa
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  validar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sintaxe e arquivos essenciais
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check app.js
+          node -e "const fs=require('fs'); const m=JSON.parse(fs.readFileSync('manifest.webmanifest')); if (m.display!=='standalone') process.exit(1);"
+          test -s index.html
+          test -s style.css
+          test -s icon.svg
+          grep -q 'save_driver_ledger' app.js
+          grep -q 'supabase.js' index.html
+          echo "JS, manifesto e arquivos verificados"
+      - name: Confirmar disponibilidade da biblioteca Supabase
+        run: |
+          curl --fail --silent --show-error --location --retry 2 --max-time 30             "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.0/dist/umd/supabase.js"             -o /tmp/supabase.js
+          test "$(wc -c </tmp/supabase.js)" -gt 10000
+          echo "Dependencia CDN disponivel"
