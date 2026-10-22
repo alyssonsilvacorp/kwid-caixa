@@ -1,0 +1,35 @@
+name: Importar codigo existente da Vercel
+on:
+  push:
+    paths:
+      - '.github/workflows/import-deployed-source.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  importar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Recuperar arquivos publicados no RodaCaixa
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://kwid-caixa-web.vercel.app"
+          for path in app.js style.css icon.svg manifest.webmanifest; do
+            curl --fail --show-error --silent --location --retry 3 --max-time 40 "$base/$path" -o "$path"
+            test -s "$path"
+          done
+          node --check app.js
+          grep -q 'supabase' app.js
+          grep -q 'standalone' manifest.webmanifest
+          echo "Arquivos recuperados e sintaxe verificada."
+      - name: Versionar codigo recuperado
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app.js style.css icon.svg manifest.webmanifest
+          if ! git diff --cached --quiet; then
+            git commit -m "feat: import RodaCaixa code from existing Vercel deploy"
+            git push origin main
+          fi
