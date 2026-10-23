@@ -129,3 +129,19 @@ body:has(.auth-premium){background:radial-gradient(ellipse 67% 55% at 50% 12%,#1
 .social-btn{gap:13px}
 @media(max-height:740px){.hero-wheel{height:126px;width:126px}.brand-lockup .slogan{margin-bottom:14px}}
 @media(prefers-reduced-motion:reduce){.hero-wheel,.hero-wheel svg{transition:none}}
+
+/* Platforms and per-app fee plans, progressively disclosed for a 2-tap turn start */
+.multi-app-switch{display:flex;align-items:center;gap:12px;padding:11px 13px;background:#132820;border:1px solid #285541;border-radius:14px;margin:12px 0;color:#e0ffef;cursor:pointer}
+.multi-app-switch input{width:20px;height:20px;margin:0;min-height:0;accent-color:#64e0ae;flex-shrink:0}
+.multi-app-switch span{font-size:13px;font-weight:780}
+.platform-addons{background:#111d22;border-radius:14px;border:1px solid #2d4244;padding:13px;margin:9px 0}
+.multi-title{display:block;font-size:11px;font-weight:760;color:#a6c5bd;margin-bottom:9px}
+.platform-checks{display:flex;flex-wrap:wrap;gap:8px}
+.platform-pill{display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:690;color:#d8eee6;border:1px solid #40575a;background:#172a2f;border-radius:100px;padding:9px 11px;margin:0;min-height:0}
+.platform-pill input{width:16px;height:16px;min-height:0;margin:0;accent-color:var(--mint)}
+.plan-box{background:linear-gradient(145deg,#152b28,#122027);border:1px solid #365b50;border-radius:15px;padding:13px 14px;margin:14px 0}
+.plan-title{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:7px;font-size:13px;font-weight:820;color:#d9f5e8}
+.plan-title span{font-size:10px;font-weight:580;color:#8db3a7}
+.plan-box label{font-size:11px}
+.plan-box .field-hint{font-size:10px;margin:8px 0 3px}
+.plan-details{border-top:1px solid #3a5c4e;margin-top:12px;padding-top:7px}
