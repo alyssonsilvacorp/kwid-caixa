@@ -276,7 +276,7 @@ loginScreen=function(){
 mount=function(page){
  const active=activeTurn();
  out.innerHTML='<header class="top top-premium"><div class="brand"><img src="/icon.svg" alt="RodaCaixa" width="42" height="42"><div><b>RodaCaixa</b><small>Seu financeiro na direção</small></div></div><div class="user-connection"><div class="online">'+(saving?"● Salvando":!navigator.onLine?"● Sem internet":lastSaved?"● Sincronizado":"● Conectado")+'</div><button class="signout" data-action="signout" aria-label="Sair da conta">Sair</button></div></header>'+
- (active?'<div class="status-strip"><span class="pulse-dot"></span><b>Turno em andamento</b><span>'+esc(active.platform||"99")+' · Iniciado às '+esc(active.start||"—")+'</span></div>':"")+
+ (active?'<div class="status-strip"><span class="pulse-dot"></span><b>Turno em andamento</b><span>'+esc(selectedPlatforms(active).join(" + "))+' · Iniciado às '+esc(active.start||"—")+'</span></div>':"")+
  '<main class="app-main">'+page+'</main><nav class="footnav" aria-label="Navegação">'+[["inicio","⌂","Início"],["turno","◉",active?"Ao vivo":"Turno"],["gastos","▣","Gastos"],["metas","◎","Metas"],["ajustes","⚙","Ajustes"]].map(x=>'<button type="button" data-go="'+x[0]+'" class="'+(screenName===x[0]?"active":"")+'"><strong>'+x[1]+'</strong>'+x[2]+'</button>').join("")+'</nav>';
  bind();
 };
@@ -297,20 +297,20 @@ turns=function(){
   return '<div class="section-overline">JORNADA DO MOTORISTA</div><h1>Pronto para rodar?</h1><p class="desc">Um toque para abrir o turno. O aplicativo registra a hora e a data do dispositivo automaticamente.</p>'+
   '<div class="hero start-hero"><div class="wheel-ambient"><img src="/icon.svg" alt=""></div><div class="eyebrow">SEU PRÓXIMO TURNO</div><div class="big">Boa viagem.</div><p class="muted">Você só precisa informar o odômetro de partida.</p></div>'+
   '<form class="card quick-form" id="startShiftForm"><div class="quick-head"><b>Começar agora</b><span class="pill">Horário automático</span></div>'+
-  sel("platform","Aplicativo principal",[["99","99"],["Uber","Uber"],["inDrive","inDrive"],["Particular","Particular"],["Outro","Outro"]],"99")+
+  platformStartControls()+
   inpt("startKm","KM atual no painel (odômetro)","number",last?.odoEnd??"","required min=0 step=0.1 inputmode=decimal placeholder=Ex: 45950")+
   '<div class="field-hint">Data e hora: <b id="clockPreview">'+new Date().toLocaleString("pt-BR")+'</b> · horário do aparelho</div><button class="btn block bright-large" type="submit">▶ Iniciar turno agora</button></form>'+
   '<div class="help">Ainda não sabe o odômetro? Consulte o painel antes de começar. O valor final será informado somente no encerramento.</div>'+
   '<h2>Últimos turnos</h2>'+historyCards();
  }
  const rides=shiftRides(active),startKm=Number(active.odoStart)||0,at=active.start||"—";
- return '<div class="section-overline"><span class="pulse-dot"></span> TURNO EM ANDAMENTO</div><h1>Boa rota!</h1><p class="desc">Iniciado às <b>'+esc(at)+'</b> em '+esc(when(active.date))+' · '+esc(active.platform||"99")+'. Registre cada corrida em segundos.</p>'+
+ return '<div class="section-overline"><span class="pulse-dot"></span> TURNO EM ANDAMENTO</div><h1>Boa rota!</h1><p class="desc">Iniciado às <b>'+esc(at)+'</b> em '+esc(when(active.date))+' · '+esc(selectedPlatforms(active).join(" + "))+'. Registre cada corrida em segundos.</p>'+
  '<div class="hero live-hero"><div class="eyebrow">RECEITA DO TURNO</div><div class="big">'+BRL(active.grossC)+'</div><div class="live-metrics"><span>'+rides.length+' corrida(s)</span><span>'+kmRide(active).toLocaleString("pt-BR",{minimumFractionDigits:1,maximumFractionDigits:1})+' km em corridas</span></div></div>'+
  '<div class="quick-actions"><button class="btn block bright-large" type="button" data-open-ride>＋ Registrar corrida</button><button class="btn secondary block" type="button" data-close-panel>Encerrar turno</button></div>'+
  '<div id="ridePanel" class="card quick-form '+(proofFile?"":"hidden-panel")+'"><div class="quick-head"><b>Nova corrida</b><button type="button" class="icon-close" data-close-ride aria-label="Fechar">✕</button></div>'+
  '<form id="rideForm">'+inpt("value","Valor recebido (R$)","number","","required min=0 step=0.01 inputmode=decimal placeholder=Ex: 12.50")+
  '<div class="grid">'+inpt("km","KM da corrida (opcional)","number","","min=0 step=0.1 inputmode=decimal placeholder=Ex: 6.4")+
- sel("platform","Plataforma",[["99","99"],["Uber","Uber"],["inDrive","inDrive"],["Particular","Particular"],["Outro","Outro"]],active.platform||"99")+'</div>'+
+ sel("platform","Plataforma",selectedPlatforms(active).map(p=>[p,p]),active.platform||"99")+'</div>'+
  '<div class="upload-area"><label for="proofUpload" class="upload-label">▤ Anexar print, foto, PDF, CSV ou Excel <span>Opcional · arquivo privado · até 10 MB</span></label><input id="proofUpload" type="file" accept="image/*,application/pdf,.csv,.xls,.xlsx,text/csv" style="max-width:100%;font-size:12px">'+
  '<div id="proofInfo" class="field-hint">'+(proofFile?esc(proofFile.name):"Você pode registrar só o valor e continuar rodando.")+'</div>'+
  '<button type="button" class="btn secondary tiny" data-read-proof>Tentar ler dados do arquivo (experimental)</button><div class="field-hint" id="extractInfo"></div></div>'+
@@ -354,9 +354,16 @@ submit=async function(ev){
   if(form.id==="startShiftForm"){
    if(activeTurn())throw Error("Já existe um turno em andamento.");
    const od=num(fval(form,"startKm")),platform=fval(form,"platform");if(!Number.isFinite(od)||od<0)throw Error("Informe o KM inicial indicado no painel.");
+   const platforms=platformSelection(form),plans=planChoices(form,platforms);
    const dt=datetimeLocal();
-   const shift={id:rid(),status:"active",date:dt.date,platform,start:dt.clock,startedAt:dt.at,startedTimezone:dt.zone,odoStart:od,odoEnd:null,end:null,rides:[],grossC:0,km:0,otherC:0,fuelPriceC:finance.settings.fuelPriceC,kmPerL:finance.settings.kmPerL,wearPerKmC:finance.settings.wearPerKmC,note:""};
-   if(await save(d=>d.shifts.push(shift)))notify("Turno iniciado às "+dt.clock+". Boa viagem!");
+   const shift={id:rid(),status:"active",date:dt.date,platform,platforms,plans,start:dt.clock,startedAt:dt.at,startedTimezone:dt.zone,odoStart:od,odoEnd:null,end:null,rides:[],grossC:0,km:0,otherC:0,fuelPriceC:finance.settings.fuelPriceC,kmPerL:finance.settings.kmPerL,wearPerKmC:finance.settings.wearPerKmC,note:""};
+   if(await save(d=>{
+    d.shifts.push(shift);
+    for(const plan of plans){if(!plan.paidNow)continue;
+      d.expenses.push({id:rid(),date:dt.date,kind:"pacote",category:plan.label,amountC:plan.priceC,
+        platform:plan.platform,planCode:plan.code,shiftId:shift.id,note:"Pacote informado no início do turno · cobrado uma vez"});
+    }
+   }))notify("Turno iniciado às "+dt.clock+". Boa viagem!");
    return;
   }
   if(form.id==="rideForm"){
@@ -504,6 +511,54 @@ function integratedWheel(){
  '<g fill="#c7f3e4"><circle cx="0" cy="-29" r="2.6"/><circle cx="27.58" cy="-8.97" r="2.6"/><circle cx="17.04" cy="23.46" r="2.6"/><circle cx="-17.04" cy="23.46" r="2.6"/><circle cx="-27.58" cy="-8.97" r="2.6"/></g>'+
  '</g><path d="M54 38a94 94 0 0 1 112 3" fill="none" stroke="#b4ffdd" stroke-width="1" opacity=".55"/></svg>'+
  '</div>';
+}
+
+
+const availablePlatforms=["99","Uber","inDrive","Particular","Outro"];
+function selectedPlatforms(s){return Array.isArray(s?.platforms)&&s.platforms.length?s.platforms:[s?.platform||"99"]}
+function platformStartControls(){
+ return sel("platform","Aplicativo principal",availablePlatforms.map(p=>[p,p]),"99")+
+ '<label class="multi-app-switch"><input type="checkbox" name="useMultiple" id="useMultiple"><span>Vou usar mais de um aplicativo</span></label>'+
+ '<div id="multiAppWrap" class="platform-addons hidden-panel"><span class="multi-title">Outros aplicativos deste turno</span><div id="otherPlatforms" class="platform-checks"></div></div>'+
+ '<div class="plan-box" id="planBox99"><div class="plan-title">Pacote 99 Taxa Zero <span>Se você contratou</span></div>'+
+ sel("plan99","Pacote mostrado no seu app",[["none","Ainda não comprei / não informado"],["99-1day","1 dia · referência R$ 26,99"],["99-3day","3 dias · referência R$ 67,99"],["99-200","Até R$ 200 em ganhos · referência R$ 25,99"],["99-600","Até R$ 600 em ganhos · referência R$ 62,99"],["99-custom","Outro pacote (valor manual)"]],"none")+
+ '<div class="plan-details hidden-panel" id="plan99Details">'+inpt("plan99Price","Valor efetivamente pago (R$)","number","","min=0.01 step=0.01 inputmode=decimal")+
+ sel("plan99Payment","Como registrar a compra?",[["new","Acabei de comprar: incluir custo uma vez"],["existing","Já paguei em outro turno: não cobrar de novo"]],"new")+
+ '<p class="field-hint">Valores iniciais são os que você mostrou. Confira a oferta e a validade no aplicativo 99. Eventuais devoluções de taxas devem ser conferidas no acerto semanal.</p></div></div>'+
+ '<div class="plan-box hidden-panel" id="planBoxUber"><div class="plan-title">Cobrança Uber <span>Conforme sua conta</span></div>'+
+ sel("planUber","Como funciona sua cobrança?",[["variable","Taxa de serviço por corrida / desconhecida"],["pass","Passe para Motoristas (se aparecer no seu app)"],["uber-custom","Assinatura ou pacote informado manualmente"]],"variable")+
+ '<div class="plan-details hidden-panel" id="planUberDetails">'+inpt("planUberPrice","Preço pago pelo Passe (R$)","number","","min=0.01 step=0.01 inputmode=decimal")+
+ sel("planUberPayment","Registrar cobrança",[["new","Comprei agora: custo uma única vez"],["existing","Já estava pago: não cobrar novamente"]],"new")+'</div>'+
+ '<p class="field-hint">Nem todos os motoristas têm acesso a Passe Uber. O RodaCaixa não pressupõe percentual fixo da plataforma.</p></div>'+
+ '<div class="field-hint">Selecione somente aplicativos que realmente usará. Não é preciso preencher nenhum plano se você não comprou um.</div>';
+}
+function platformSelection(form){
+ const main=fval(form,"platform");
+ const additional=[...form.querySelectorAll('input[name="otherPlatform"]:checked')].map(x=>x.value);
+ return [main,...(form.querySelector('[name="useMultiple"]')?.checked?additional:[])].filter((v,i,a)=>a.indexOf(v)===i);
+}
+const tariffPlans99={"99-1day":{priceC:2699,label:"Pacote 99 Taxa Zero · 1 dia",durationHours:24},
+"99-3day":{priceC:6799,label:"Pacote 99 Taxa Zero · 3 dias",durationHours:72},
+"99-200":{priceC:2599,label:"Pacote 99 Taxa Zero · limite R$ 200",earningCapC:20000},
+"99-600":{priceC:6299,label:"Pacote 99 Taxa Zero · limite R$ 600",earningCapC:60000}};
+function planChoices(form,platforms){
+ const choices=[];
+ if(platforms.includes("99")){
+  const code=fval(form,"plan99");if(code&&code!=="none"){
+   const template=tariffPlans99[code]||{label:"Pacote 99 Taxa Zero · outro",priceC:0};
+   const price=cent(fval(form,"plan99Price"));if(!Number.isFinite(price)||price<=0)throw Error("Informe o valor pago pelo pacote 99.");
+   choices.push({platform:"99",code,label:template.label,priceC:price,paidNow:fval(form,"plan99Payment")==="new",
+     earningCapC:template.earningCapC||null,durationHours:template.durationHours||null,source:"informado pelo motorista"});
+  }
+ }
+ if(platforms.includes("Uber")){
+  const code=fval(form,"planUber");if(code&&code!=="variable"){
+   const price=cent(fval(form,"planUberPrice"));if(!Number.isFinite(price)||price<=0)throw Error("Informe o valor do Passe Uber.");
+   choices.push({platform:"Uber",code,label:code==="pass"?"Passe para Motoristas Uber":"Plano Uber personalizado",priceC:price,
+     paidNow:fval(form,"planUberPayment")==="new",source:"informado pelo motorista"});
+  }
+ }
+ return choices;
 }
 
 start();
