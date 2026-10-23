@@ -244,5 +244,217 @@ async function start(){
  });
  try{const {data,error}=await client.auth.getSession();if(error)throw error;if(data.session)await loadAccount(data.session.user);else render()}catch(err){notify(err.message,true);render()}
 }
+
+/* RodaCaixa UX mobile v0.3 — turnos ao vivo, corridas rápidas, comprovantes privados e marca premium. */
+const legacyBind=bind,legacySubmit=submit,legacyHome=home,legacyMetrics=compute;
+let proofFile=null,proofText="",fileWarning="",socialBusy=false;
+const activeTurn=()=>finance?.shifts?.find(s=>s.status==="active");
+const datetimeLocal=()=>{const d=new Date();return {at:d.toISOString(),date:today(),clock:String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0"),zone:Intl.DateTimeFormat().resolvedOptions().timeZone||"dispositivo"}};
+const shiftRides=s=>(Array.isArray(s?.rides)?s.rides:[]);
+const kmRide=s=>shiftRides(s).reduce((sum,r)=>sum+(Number(r.km)||0),0);
+const sumRide=s=>shiftRides(s).reduce((sum,r)=>sum+(Number(r.valueC)||0),0);
+const shortClock=v=>v||"—";
+const fmtMoneyInput=c=>((Number(c)||0)/100).toFixed(2);
+const footer='<div class="auth-footer">Seus dados financeiros ficam protegidos e sincronizados na sua conta.</div>';
+const userLegal='Acompanhe custos e resultados com clareza. Não representa saldo bancário ou garantia de lucro.';
+const socialButton=(provider,label,letter)=>'<button type="button" class="social-btn" data-oauth="'+provider+'"><span class="social-symbol">'+letter+'</span>Continuar com '+label+'</button>';
+loginScreen=function(){
+ const modes={login:["Bem-vindo de volta","Acesse seu painel financeiro"],signup:["Comece a dirigir seus números","Crie sua conta gratuitamente"],reset:["Recupere seu acesso","Enviaremos um link de recuperação"],newpass:["Nova senha","Escolha uma nova senha segura"]};
+ const [heading,help]=modes[authMode];
+ out.innerHTML='<div class="login-ambient"></div><div class="auth auth-premium"><div class="center brand-lockup"><img src="/icon.svg" alt="Símbolo RodaCaixa" width="82" height="82"><div class="auth-kicker">FINANÇAS SOBRE RODAS</div><h1>Roda<span>Caixa</span></h1><p class="slogan">Cada corrida conta. Cada real também.</p></div>'+
+ '<div class="card auth-card"><h2>'+heading+'</h2><p class="desc">'+help+'</p><form id="authForm">'+(authMode==="newpass"?"":inpt("email","E-mail","email","","required autocomplete=email"))+(authMode==="reset"?"":'<label>Senha<div class="password-wrap"><input name="password" type="password" minlength="8" required autocomplete="'+(authMode==="login"?"current-password":"new-password")+'" placeholder="Sua senha" id="passwordField"><button type="button" class="show-password" data-password-toggle aria-label="Mostrar ou ocultar senha">◉</button></div></label>')+
+ '<button type="submit" class="btn block primary-action">'+(authMode==="login"?"Entrar na minha conta":authMode==="signup"?"Criar minha conta":authMode==="reset"?"Enviar link":"Atualizar senha")+' <span>→</span></button></form>'+
+ (authMode==="login"||authMode==="signup"?'<div class="social-divider"><span>ou acesse com</span></div>'+socialButton("google","Google",'<svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#4285F4" d="M43.61 24.46c0-1.36-.12-2.7-.35-4H24v7.57h11a9.4 9.4 0 0 1-4.08 6.17v5.13h6.61c3.88-3.57 6.08-8.82 6.08-14.87Z"/><path fill="#34A853" d="M24 44c5.55 0 10.2-1.84 13.6-4.99l-6.6-5.13c-1.84 1.23-4.19 1.96-7 1.96-5.37 0-9.92-3.62-11.54-8.5H5.64v5.28A20 20 0 0 0 24 44Z"/><path fill="#FBBC05" d="M12.46 27.34a12 12 0 0 1 0-7.68v-5.28H5.64a20 20 0 0 0 0 17.24l6.82-5.28Z"/><path fill="#EA4335" d="M24 11.94c3.02 0 5.72 1.04 7.84 3.07l5.89-5.88C34.19 5.83 29.56 4 24 4A20 20 0 0 0 5.64 15.38l6.82 5.28C14.08 15.78 18.63 11.94 24 11.94Z"/></svg>')+socialButton("apple","Apple",'<span style="font-size:21px">●</span>')+'<div class="social-note">Google e Apple exigem ativação dos provedores de login.</div>':"")+
+ '<div class="authswitch">'+(authMode!=="login"?'<button class="linkbtn" data-auth="login">Já tenho conta</button>':"")+(authMode!=="signup"?'<button class="linkbtn" data-auth="signup">Criar conta</button>':"")+(authMode!=="reset"?'<button class="linkbtn" data-auth="reset">Recuperar senha</button>':"")+'</div></div>'+footer+'</div>';
+ $("#authForm").addEventListener("submit",handleAuth);
+ out.querySelectorAll("[data-auth]").forEach(b=>b.onclick=()=>{authMode=b.dataset.auth;render()});
+ out.querySelector("[data-password-toggle]")?.addEventListener("click",()=>{const f=$("#passwordField");f.type=f.type==="password"?"text":"password"});
+ out.querySelectorAll("[data-oauth]").forEach(b=>b.onclick=async()=>{if(socialBusy)return;socialBusy=true;const provider=b.dataset.oauth;
+  try{const {error}=await client.auth.signInWithOAuth({provider,options:{redirectTo:location.origin,skipBrowserRedirect:false}});
+   if(error)throw error;}catch(err){notify("Login "+provider+": é necessário ativar/configurar este provedor no Supabase. "+err.message,true)}finally{socialBusy=false}});
+};
+mount=function(page){
+ const active=activeTurn();
+ out.innerHTML='<header class="top top-premium"><div class="brand"><img src="/icon.svg" alt="RodaCaixa" width="42" height="42"><div><b>RodaCaixa</b><small>Seu financeiro na direção</small></div></div><div class="user-connection"><div class="online">'+(saving?"● Salvando":!navigator.onLine?"● Sem internet":lastSaved?"● Sincronizado":"● Conectado")+'</div><button class="signout" data-action="signout" aria-label="Sair da conta">Sair</button></div></header>'+
+ (active?'<div class="status-strip"><span class="pulse-dot"></span><b>Turno em andamento</b><span>'+esc(active.platform||"99")+' · Iniciado às '+esc(active.start||"—")+'</span></div>':"")+
+ '<main class="app-main">'+page+'</main><nav class="footnav" aria-label="Navegação">'+[["inicio","⌂","Início"],["turno","◉",active?"Ao vivo":"Turno"],["gastos","▣","Gastos"],["metas","◎","Metas"],["ajustes","⚙","Ajustes"]].map(x=>'<button type="button" data-go="'+x[0]+'" class="'+(screenName===x[0]?"active":"")+'"><strong>'+x[1]+'</strong>'+x[2]+'</button>').join("")+'</nav>';
+ bind();
+};
+const recentShifts=()=>finance.shifts.slice().reverse();
+home=function(){
+ const a=legacyMetrics(),active=activeTurn(),todayShifts=finance.shifts.filter(s=>s.date===today()),dailyGross=todayShifts.reduce((v,s)=>v+(s.grossC||0),0),rideCount=todayShifts.reduce((v,s)=>v+shiftRides(s).length,0);
+ return '<div class="section-overline">SEU PAINEL FINANCEIRO</div><h1>Seu trabalho, <em>no controle.</em></h1><p class="desc">Acompanhe cada corrida e proteja o dinheiro que seu carro precisa.</p>'+
+ '<div class="hero premium-hero"><div class="eyebrow">Resultado após custos · acumulado</div><div class="big">'+BRL(a.result)+'</div><p class="muted">Estimativa operacional, não saldo na conta</p><div class="mini-metrics">'+line("Faturamento bruto",BRL(a.gross))+line("Custos e provisões","− "+BRL(a.gross-a.result))+'</div></div>'+
+ (active?'<button class="btn block bright-large" data-go="turno"><span class="pulse-dot dark-dot"></span> Continuar meu turno <b>→</b></button>':
+ '<button class="btn block bright-large" data-go="turno">▶ Iniciar meu turno <b>→</b></button>')+
+ '<div class="stat-section"><div class="stat-item"><div class="stat-name">Faturado hoje</div><div class="stat-number">'+BRL(dailyGross)+'</div><small>'+rideCount+' corrida(s) registrada(s)</small></div><div class="stat-item"><div class="stat-name">Para você</div><div class="stat-number">'+BRL(a.personal)+'</div><small>Disponível estimado</small></div><div class="stat-item"><div class="stat-name">Fundo do carro</div><div class="stat-number">'+BRL(a.car)+'</div><small>Provisão estimada</small></div><div class="stat-item"><div class="stat-name">Km trabalhados</div><div class="stat-number">'+a.km.toFixed(1)+' <small>km</small></div><small>Inclui estimativas em turno ativo</small></div></div>'+
+ '<div class="card soft-card"><div class="row"><span>Meta de reserva por dia</span><b class="mint-value">'+BRL(a.daily)+'</b></div><p class="muted">Valor planejado para metas com prazo. Ajuste em Metas.</p><button class="inline-link" data-go="metas">Ver minhas metas →</button></div>'+
+ '<h2>Atividade recente</h2><div class="list">'+(recentShifts().length?recentShifts().slice(0,4).map(s=>'<div class="entry"><div class="row"><b>'+esc(when(s.date))+' · '+esc(s.platform||"99")+'</b><b>'+BRL(s.grossC)+'</b></div><p>'+esc(s.status==="active"?"Em andamento":"Encerrado")+' · '+shiftRides(s).length+' corrida(s) · '+(Number(s.km)||0).toFixed(1)+' km</p></div>').join(""):'<div class="help">Seu primeiro turno vai aparecer aqui. Nenhum registro fictício foi criado.</div>')+'</div>';
+};
+turns=function(){
+ const active=activeTurn(),s=finance.settings,last=finance.shifts.filter(t=>t.odoEnd!=null).slice().reverse()[0];
+ if(!active){
+  return '<div class="section-overline">JORNADA DO MOTORISTA</div><h1>Pronto para rodar?</h1><p class="desc">Um toque para abrir o turno. O aplicativo registra a hora e a data do dispositivo automaticamente.</p>'+
+  '<div class="hero start-hero"><div class="wheel-ambient"><img src="/icon.svg" alt=""></div><div class="eyebrow">SEU PRÓXIMO TURNO</div><div class="big">Boa viagem.</div><p class="muted">Você só precisa informar o odômetro de partida.</p></div>'+
+  '<form class="card quick-form" id="startShiftForm"><div class="quick-head"><b>Começar agora</b><span class="pill">Horário automático</span></div>'+
+  sel("platform","Aplicativo principal",[["99","99"],["Uber","Uber"],["inDrive","inDrive"],["Particular","Particular"],["Outro","Outro"]],"99")+
+  inpt("startKm","KM atual no painel (odômetro)","number",last?.odoEnd??"","required min=0 step=0.1 inputmode=decimal placeholder=Ex: 45950")+
+  '<div class="field-hint">Data e hora: <b id="clockPreview">'+new Date().toLocaleString("pt-BR")+'</b> · horário do aparelho</div><button class="btn block bright-large" type="submit">▶ Iniciar turno agora</button></form>'+
+  '<div class="help">Ainda não sabe o odômetro? Consulte o painel antes de começar. O valor final será informado somente no encerramento.</div>'+
+  '<h2>Últimos turnos</h2>'+historyCards();
+ }
+ const rides=shiftRides(active),startKm=Number(active.odoStart)||0,at=active.start||"—";
+ return '<div class="section-overline"><span class="pulse-dot"></span> TURNO EM ANDAMENTO</div><h1>Boa rota!</h1><p class="desc">Iniciado às <b>'+esc(at)+'</b> em '+esc(when(active.date))+' · '+esc(active.platform||"99")+'. Registre cada corrida em segundos.</p>'+
+ '<div class="hero live-hero"><div class="eyebrow">RECEITA DO TURNO</div><div class="big">'+BRL(active.grossC)+'</div><div class="live-metrics"><span>'+rides.length+' corrida(s)</span><span>'+kmRide(active).toFixed(1)+' km em corridas</span></div></div>'+
+ '<div class="quick-actions"><button class="btn block bright-large" type="button" data-open-ride>＋ Registrar corrida</button><button class="btn secondary block" type="button" data-close-panel>Encerrar turno</button></div>'+
+ '<div id="ridePanel" class="card quick-form '+(proofFile?"":"hidden-panel")+'"><div class="quick-head"><b>Nova corrida</b><button type="button" class="icon-close" data-close-ride aria-label="Fechar">✕</button></div>'+
+ '<form id="rideForm">'+inpt("value","Valor recebido (R$)","number","","required min=0 step=0.01 inputmode=decimal placeholder=Ex: 12.50")+
+ '<div class="grid">'+inpt("km","KM da corrida (opcional)","number","","min=0 step=0.1 inputmode=decimal placeholder=Ex: 6.4")+
+ sel("platform","Plataforma",[["99","99"],["Uber","Uber"],["inDrive","inDrive"],["Particular","Particular"],["Outro","Outro"]],active.platform||"99")+'</div>'+
+ '<div class="upload-area"><label for="proofUpload" class="upload-label">▤ Anexar print, foto, PDF, CSV ou Excel <span>Opcional · arquivo privado · até 10 MB</span></label><input id="proofUpload" type="file" accept="image/*,application/pdf,.csv,.xls,.xlsx,text/csv" style="max-width:100%;font-size:12px">'+
+ '<div id="proofInfo" class="field-hint">'+(proofFile?esc(proofFile.name):"Você pode registrar só o valor e continuar rodando.")+'</div>'+
+ '<button type="button" class="btn secondary tiny" data-read-proof>Tentar ler dados do arquivo (experimental)</button><div class="field-hint" id="extractInfo"></div></div>'+
+ '<button type="submit" class="btn block bright-large">Salvar corrida na nuvem →</button></form></div>'+
+ '<div id="endPanel" class="card quick-form hidden-panel"><div class="quick-head"><b>Finalizar expediente</b><button type="button" class="icon-close" data-close-end>✕</button></div>'+
+ '<form id="endShiftForm"><p class="muted">Início: '+esc(startKm)+' km. O encerramento registra o horário automaticamente.</p>'+
+ inpt("endKm","Odômetro atual (KM do painel)","number","","required min=0 step=0.1 inputmode=decimal placeholder=Ex: 46045")+
+ '<div id="endKmInfo" class="field-hint">O total inclui busca, corridas e deslocamentos vazios.</div><button type="submit" class="btn block bright-large">✓ Encerrar meu turno</button></form></div>'+
+ '<div class="sectiontop"><h2>Corridas registradas</h2><span class="pill">'+rides.length+' no turno</span></div>'+
+ (rides.length?'<div class="list">'+rides.slice().reverse().map((r,i)=>'<div class="entry"><div class="row"><b>'+esc(r.platform||active.platform||"99")+' · '+esc(r.clock||"")+'</b><b>'+BRL(r.valueC)+'</b></div><p>'+esc(r.km==null?"KM não informado":Number(r.km).toFixed(1)+" km")+(r.evidence?.path?' · Comprovante privado salvo':"")+'</p><div class="actions"><button type="button" class="btn secondary tiny" data-edit-ride="'+esc(r.id)+'">Corrigir</button><button type="button" class="btn danger tiny" data-remove-ride="'+esc(r.id)+'">Excluir</button></div></div>').join("")+'</div>':
+ '<div class="help">Nenhuma corrida registrada. Ao terminar uma viagem, toque em <b>Registrar corrida</b>, informe quanto recebeu e salve.</div>');
+};
+function historyCards(){
+ const closed=finance.shifts.filter(s=>s.status!=="active").slice().reverse().slice(0,6);
+ return closed.length?'<div class="list">'+closed.map(s=>'<div class="entry"><div class="row"><b>'+when(s.date)+' · '+esc(s.platform||"99")+'</b><b>'+BRL(s.grossC)+'</b></div><p>'+Number(s.km||0).toFixed(1)+' km · '+shiftRides(s).length+' corrida(s) · '+esc(s.start||"")+"–"+esc(s.end||"")+'</p><button class="btn danger tiny" type="button" data-delete-closed="'+esc(s.id)+'">Excluir turno</button></div>').join("")+'</div>':'<div class="help">Seu histórico de turnos aparecerá aqui.</div>';
+}
+const legacySettings=settings;
+settings=function(){return legacySettings().replace('Backup e sincronização','Dados e backup').replace('Sem internet, nenhum lançamento é salvo.','Sem internet, nenhum lançamento é salvo. Prints e arquivos são enviados somente quando você os anexa.')};
+bind=function(){
+ legacyBind();
+ const $a=sel=>out.querySelector(sel);
+ const toggle=(s,hidden)=>{const x=$a(s);if(x)x.classList.toggle("hidden-panel",hidden)};
+ $a("[data-open-ride]")?.addEventListener("click",()=>{toggle("#ridePanel",false);toggle("#endPanel",true);$a("#rideForm input[name=value]")?.focus()});
+ $a("[data-close-ride]")?.addEventListener("click",()=>{toggle("#ridePanel",true);proofFile=null;proofText=""});
+ $a("[data-close-panel]")?.addEventListener("click",()=>{toggle("#endPanel",false);toggle("#ridePanel",true)});
+ $a("[data-close-end]")?.addEventListener("click",()=>toggle("#endPanel",true));
+ $a("#endShiftForm")?.addEventListener("input",()=>{const shift=activeTurn(),input=$a("#endShiftForm input[name=endKm]"),n=num(input.value),diff=n-(Number(shift?.odoStart)||0);$a("#endKmInfo").textContent=Number.isFinite(diff)&&diff>0?"Total do trabalho: "+diff.toFixed(1)+" km (inclui km vazios).":"Odômetro final deve ser maior que o inicial."});
+ $a("#proofUpload")?.addEventListener("change",ev=>{const file=ev.target.files?.[0];if(!file){proofFile=null;return}if(file.size>10*1024*1024){notify("Máximo permitido: 10 MB.",true);ev.target.value="";proofFile=null;return}proofFile=file;proofText="";$a("#proofInfo").textContent="Selecionado: "+file.name+" ("+Math.ceil(file.size/1024)+" KB). Será salvo após confirmar a corrida."});
+ $a("[data-read-proof]")?.addEventListener("click",()=>previewExtraction($a("#rideForm")));
+ $a("[data-delete-closed]")?.addEventListener("click",ev=>deleteClosed(ev.currentTarget.dataset.deleteClosed));
+ $a("[data-remove-ride]");out.querySelectorAll("[data-remove-ride]").forEach(b=>b.addEventListener("click",()=>removeRide(b.dataset.removeRide)));
+ out.querySelectorAll("[data-edit-ride]").forEach(b=>b.addEventListener("click",()=>editRide(b.dataset.editRide)));
+ // Existing nav and buttons remain bound through legacyBind.
+};
+const previousSubmit=submit;
+submit=async function(ev){
+ if(!["startShiftForm","rideForm","endShiftForm"].includes(ev.currentTarget.id))return previousSubmit(ev);
+ ev.preventDefault();const form=ev.currentTarget;
+ try{
+  if(form.id==="startShiftForm"){
+   if(activeTurn())throw Error("Já existe um turno em andamento.");
+   const od=num(fval(form,"startKm")),platform=fval(form,"platform");if(!Number.isFinite(od)||od<0)throw Error("Informe o KM inicial indicado no painel.");
+   const dt=datetimeLocal();
+   const shift={id:rid(),status:"active",date:dt.date,platform,start:dt.clock,startedAt:dt.at,startedTimezone:dt.zone,odoStart:od,odoEnd:null,end:null,rides:[],grossC:0,km:0,otherC:0,fuelPriceC:finance.settings.fuelPriceC,kmPerL:finance.settings.kmPerL,wearPerKmC:finance.settings.wearPerKmC,note:""};
+   if(await save(d=>d.shifts.push(shift)))notify("Turno iniciado às "+dt.clock+". Boa viagem!");
+   return;
+  }
+  if(form.id==="rideForm"){
+   const shift=activeTurn();if(!shift)throw Error("Inicie o turno antes da corrida.");
+   const price=cent(fval(form,"value")),kmText=fval(form,"km"),distance=kmText?num(kmText):null;
+   if(!Number.isFinite(price)||price<0)throw Error("Informe o valor da corrida.");
+   if(distance!==null&&(!Number.isFinite(distance)||distance<0))throw Error("KM da corrida inválido.");
+   const dt=datetimeLocal(),ride={id:rid(),valueC:price,km:distance,platform:fval(form,"platform"),clock:dt.clock,at:dt.at,source:"manual"};
+   const good=await save(d=>{const s=d.shifts.find(x=>x.id===shift.id);s.rides=s.rides||[];s.rides.push(ride);s.grossC=sumRide(s);s.km=kmRide(s)});
+   if(!good)return;
+   if(proofFile){const copy=proofFile;proofFile=null;await uploadReceipt(shift.id,ride.id,copy)}
+   return;
+  }
+  if(form.id==="endShiftForm"){
+   const shift=activeTurn();if(!shift)throw Error("Nenhum turno em andamento.");
+   const endKm=num(fval(form,"endKm"));if(!Number.isFinite(endKm)||endKm<=Number(shift.odoStart))throw Error("Informe o odômetro final maior que o inicial.");
+   const total=Math.round((endKm-Number(shift.odoStart))*10)/10;
+   if(kmRide(shift)>total+0.5&&!confirm("O total de KM das corridas supera os KM do odômetro. Confirma os números?"))return;
+   const dt=datetimeLocal();
+   const ok=await save(d=>{const s=d.shifts.find(x=>x.id===shift.id);s.status="closed";s.odoEnd=endKm;s.end=dt.clock;s.endedAt=dt.at;s.km=total;s.grossC=sumRide(s)});
+   if(ok){screenName="inicio";render();notify("Turno encerrado às "+dt.clock+" · "+total.toFixed(1)+" km.");}
+   return;
+  }
+ }catch(err){notify(err.message,true)}
+};
+async function removeRide(id){
+ const s=activeTurn();if(!s||!confirm("Excluir esta corrida do turno?"))return;
+ await save(d=>{const t=d.shifts.find(x=>x.id===s.id);t.rides=t.rides.filter(r=>r.id!==id);t.grossC=sumRide(t);t.km=kmRide(t)});
+}
+async function editRide(id){
+ const s=activeTurn(),r=shiftRides(s).find(x=>x.id===id);if(!r)return;
+ const val=prompt("Valor correto da corrida (R$):",fmtMoneyInput(r.valueC));if(val===null)return;
+ const amt=cent(val);if(!Number.isFinite(amt)||amt<0){notify("Valor inválido",true);return}
+ const km=prompt("KM da corrida (deixe vazio se desconhecido):",r.km==null?"":String(r.km));if(km===null)return;
+ const dist=km.trim()?num(km):null;if(dist!==null&&(!Number.isFinite(dist)||dist<0)){notify("KM inválidos",true);return}
+ await save(d=>{const t=d.shifts.find(x=>x.id===s.id),x=t.rides.find(r=>r.id===id);x.valueC=amt;x.km=dist;t.grossC=sumRide(t);t.km=kmRide(t)});
+}
+async function deleteClosed(id){
+ if(!confirm("Excluir definitivamente este turno e todas as corridas associadas?"))return;
+ await save(d=>{d.shifts=d.shifts.filter(x=>x.id!==id)});
+}
+async function uploadReceipt(shiftId,rideId,file){
+ const extension=(file.name.split(".").pop()||"dat").toLowerCase().replace(/[^a-z0-9]/g,"").slice(0,8);
+ const type=(file.type||({"csv":"text/csv","jpg":"image/jpeg","png":"image/png","webp":"image/webp","pdf":"application/pdf","xlsx":"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet","xls":"application/vnd.ms-excel"}[extension])||"application/octet-stream");
+ const path=account.id+"/"+shiftId+"/"+rideId+"-"+rid()+"."+extension;
+ try{
+  const {error}=await client.storage.from("driver-receipts").upload(path,file,{contentType:type,upsert:false});
+  if(error)throw error;
+  const ok=await save(d=>{const s=d.shifts.find(x=>x.id===shiftId);if(!s)throw Error("Turno removido durante upload");const r=shiftRides(s).find(x=>x.id===rideId);if(!r)throw Error("Corrida removida durante upload");r.evidence={path,name:file.name,mime:type,size:file.size}});
+  if(ok)notify("Comprovante guardado em armazenamento privado.");
+  else notify("A corrida foi salva, mas o anexo não foi vinculado; tente anexar novamente.",true);
+ }catch(err){notify("Corrida salva, mas o anexo falhou: "+err.message,true)}
+}
+async function loadScript(url,check){
+ if(check())return;
+ await new Promise((resolve,reject)=>{const script=document.createElement("script");script.src=url;script.onload=resolve;script.onerror=()=>reject(new Error("Biblioteca de leitura indisponível"));document.head.appendChild(script)});
+ if(!check())throw Error("Biblioteca não carregou");
+}
+async function fileText(file){
+ const ext=(file.name.split(".").pop()||"").toLowerCase();
+ if(["csv","txt"].includes(ext))return(await file.text()).slice(0,250000);
+ if(["xlsx","xls"].includes(ext)){
+  await loadScript("https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js",()=>!!window.XLSX);
+  const data=new Uint8Array(await file.arrayBuffer()),wb=window.XLSX.read(data,{type:"array"});
+  return wb.SheetNames.slice(0,2).map(k=>window.XLSX.utils.sheet_to_csv(wb.Sheets[k])).join("\n").slice(0,250000);
+ }
+ if(["jpg","jpeg","png","webp"].includes(ext)||file.type.startsWith("image/")){
+  await loadScript("https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js",()=>!!window.Tesseract);
+  const {data}=await window.Tesseract.recognize(file,"por+eng");return data.text.slice(0,50000);
+ }
+ if(ext==="pdf"||file.type==="application/pdf"){
+  await loadScript("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.6.82/pdf.min.mjs",()=>!!window.pdfjsLib);
+  return "Não foi possível reconhecer automaticamente este PDF. Use o valor manual.";
+ }
+ throw Error("Formato sem leitor disponível. Ainda é possível salvar a corrida e anexar o arquivo.");
+}
+function guessAmounts(text){
+ const normalized=text.replace(/\u00a0/g," ").replace(/(\\r\\n|\\r)/g,"\n");
+ const currency=[...normalized.matchAll(/(?:R\$\s*)(\d{1,5}(?:[.,]\d{1,2})?)/gi)].map(m=>m[1]);
+ const distance=[...normalized.matchAll(/(?:distância|distance|percurso|km percorridos|quilômetros)[^\d]{0,20}(\d{1,5}(?:[.,]\d{1,2})?)\s*km|(\d{1,5}(?:[.,]\d{1,2})?)\s*km\b/gi)].map(m=>m[1]||m[2]);
+ return{money:currency.length===1?currency[0]:null,dist:distance.length===1?distance[0]:null,moneyCount:currency.length,distCount:distance.length};
+}
+async function previewExtraction(form){
+ if(!proofFile){notify("Anexe um arquivo para tentar a leitura.",true);return}
+ const btn=form?.querySelector("[data-read-proof]"),info=form?.querySelector("#extractInfo");
+ if(!btn||!info)return;
+ btn.disabled=true;btn.textContent="Lendo no aparelho…";
+ try{
+  const text=await fileText(proofFile);proofText=text;const g=guessAmounts(text);
+  let msg="Leitura experimental: ";
+  if(g.money){const field=form.querySelector('[name="value"]');if(field&&!field.value)field.value=g.money.replace(",",".");msg+="possível valor encontrado. "}
+  if(g.dist){const field=form.querySelector('[name="km"]');if(field&&!field.value)field.value=g.dist.replace(",",".");msg+="possível KM encontrado. "}
+  if(!g.money&&!g.dist)msg+="nenhum valor único identificado. Preencha manualmente.";
+  msg+=" Confira os números antes de salvar. ";
+  info.textContent=msg;
+  notify("Confira o valor e os KM sugeridos. Nada foi salvo automaticamente.");
+ }catch(err){info.textContent="Leitura automática indisponível: "+err.message+". Você ainda pode digitar os dados e anexar o arquivo.";notify(err.message,true)}
+ finally{btn.disabled=false;btn.textContent="Tentar ler dados do arquivo (experimental)"}
+}
+
 start();
 })();
