@@ -6,7 +6,7 @@ let code=readFileSync("app.js","utf8");
 assert.match(code,/start\(\);\s*\}\)\(\);\s*$/);
 code=code.replace(/start\(\);\s*\}\)\(\);\s*$/,'globalThis.__test={defaults,normalize,compute,activeTurn,shiftRides,kmRide,sumRide,guessAmounts,datetimeLocal,setFinance:(v)=>finance=v};})();');
 const root={innerHTML:""},toast={classList:{add(){},remove(){}},style:{},textContent:""};
-const sandbox={document:{getElementById:id=>id==="app"?root:toast},window:{},Intl,Date,Number,String,Object,Array,Math,crypto:{randomUUID:()=>"unit-test-id"},console,setTimeout,clearTimeout};
+const sandbox={document:{getElementById:id=>id==="app"?root:toast},window:{addEventListener(){}},Intl,Date,Number,String,Object,Array,Math,crypto:{randomUUID:()=>"unit-test-id"},console,setTimeout,clearTimeout};
 vm.runInNewContext(code,sandbox,{timeout:5000});
 const t=sandbox.__test;
 const d=t.defaults();
