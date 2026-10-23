@@ -28,3 +28,12 @@ jobs:
           curl --fail --silent --show-error --location --retry 2 --max-time 30             "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.0/dist/umd/supabase.js"             -o /tmp/supabase.js
           test "$(wc -c </tmp/supabase.js)" -gt 10000
           echo "Dependencia CDN disponivel"
+
+  browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Instalar biblioteca de teste do navegador
+        run: npm install --no-save --no-audit --no-fund playwright-core@1.56.1
+      - name: Validar jornada móvel com Supabase simulado
+        run: node tests/browser-smoke.cjs
