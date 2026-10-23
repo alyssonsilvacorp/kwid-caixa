@@ -306,9 +306,13 @@ turns=function(){
  const rides=shiftRides(active),startKm=Number(active.odoStart)||0,at=active.start||"—";
  return '<div class="section-overline"><span class="pulse-dot"></span> TURNO EM ANDAMENTO</div><h1>Boa rota!</h1><p class="desc">Iniciado às <b>'+esc(at)+'</b> em '+esc(when(active.date))+' · '+esc(selectedPlatforms(active).join(" + "))+'. Registre cada corrida em segundos.</p>'+
  '<div class="hero live-hero"><div class="eyebrow">RECEITA DO TURNO</div><div class="big">'+BRL(active.grossC)+'</div><div class="live-metrics"><span>'+rides.length+' corrida(s)</span><span>'+kmRide(active).toLocaleString("pt-BR",{minimumFractionDigits:1,maximumFractionDigits:1})+' km em corridas</span></div></div>'+
+ (Array.isArray(active.plans)&&active.plans.length?'<div class="active-plans">'+active.plans.map(p=>'<span>'+esc(p.label)+' · '+BRL(p.priceC)+' '+(p.paidNow?'(custo registrado)':'(já pago)')+'</span>').join("")+'</div>':"")+
  '<div class="quick-actions"><button class="btn block bright-large" type="button" data-open-ride>＋ Registrar corrida</button><button class="btn secondary block" type="button" data-close-panel>Encerrar turno</button></div>'+
  '<div id="ridePanel" class="card quick-form '+(proofFile?"":"hidden-panel")+'"><div class="quick-head"><b>Nova corrida</b><button type="button" class="icon-close" data-close-ride aria-label="Fechar">✕</button></div>'+
- '<form id="rideForm">'+inpt("value","Valor recebido (R$)","number","","required min=0 step=0.01 inputmode=decimal placeholder=Ex: 12.50")+
+ '<form id="rideForm">'+inpt("value","Valor mostrado como ganho do motorista (R$)","number","","required min=0 step=0.01 inputmode=decimal placeholder=Ex: 12.50")+
+ '<details class="fee-disclosure"><summary>Taxa da plataforma no recibo (opcional)</summary>'+
+ inpt("feeShown","Taxa já descontada do ganho (R$)","number","","min=0 step=0.01 inputmode=decimal")+
+ '<p class="field-hint">Valor de cima = quanto você recebeu/ganhou. A taxa do recibo é informativa: não será descontada duas vezes. Se a 99 devolver alguma taxa na segunda-feira, concilie o repasse quando ele realmente ocorrer.</p></details>'+
  '<div class="grid">'+inpt("km","KM da corrida (opcional)","number","","min=0 step=0.1 inputmode=decimal placeholder=Ex: 6.4")+
  sel("platform","Plataforma",selectedPlatforms(active).map(p=>[p,p]),active.platform||"99")+'</div>'+
  '<div class="upload-area"><label for="proofUpload" class="upload-label">▤ Anexar print, foto, PDF, CSV ou Excel <span>Opcional · arquivo privado · até 10 MB</span></label><input id="proofUpload" type="file" accept="image/*,application/pdf,.csv,.xls,.xlsx,text/csv" style="max-width:100%;font-size:12px">'+
@@ -320,7 +324,7 @@ turns=function(){
  inpt("endKm","Odômetro atual (KM do painel)","number","","required min=0 step=0.1 inputmode=decimal placeholder=Ex: 46045")+
  '<div id="endKmInfo" class="field-hint">O total inclui busca, corridas e deslocamentos vazios.</div><button type="submit" class="btn block bright-large">✓ Encerrar meu turno</button></form></div>'+
  '<div class="sectiontop"><h2>Corridas registradas</h2><span class="pill">'+rides.length+' no turno</span></div>'+
- (rides.length?'<div class="list">'+rides.slice().reverse().map((r,i)=>'<div class="entry"><div class="row"><b>'+esc(r.platform||active.platform||"99")+' · '+esc(r.clock||"")+'</b><b>'+BRL(r.valueC)+'</b></div><p>'+esc(r.km==null?"KM não informado":Number(r.km).toLocaleString("pt-BR",{minimumFractionDigits:1,maximumFractionDigits:1})+" km")+(r.evidence?.path?' · Comprovante privado salvo':"")+'</p><div class="actions">'+(r.evidence?.path?'<button type="button" class="btn secondary tiny" data-open-proof="'+esc(r.id)+'">Ver comprovante</button>':"")+'<button type="button" class="btn secondary tiny" data-edit-ride="'+esc(r.id)+'">Corrigir</button><button type="button" class="btn danger tiny" data-remove-ride="'+esc(r.id)+'">Excluir</button></div></div>').join("")+'</div>':
+ (rides.length?'<div class="list">'+rides.slice().reverse().map((r,i)=>'<div class="entry"><div class="row"><b>'+esc(r.platform||active.platform||"99")+' · '+esc(r.clock||"")+'</b><b>'+BRL(r.valueC)+'</b></div><p>'+esc(r.km==null?"KM não informado":Number(r.km).toLocaleString("pt-BR",{minimumFractionDigits:1,maximumFractionDigits:1})+" km")+(r.platformFeeC?' · Taxa no recibo: '+BRL(r.platformFeeC)+' (informativa)':"")+(r.evidence?.path?' · Comprovante privado salvo':"")+'</p><div class="actions">'+(r.evidence?.path?'<button type="button" class="btn secondary tiny" data-open-proof="'+esc(r.id)+'">Ver comprovante</button>':"")+'<button type="button" class="btn secondary tiny" data-edit-ride="'+esc(r.id)+'">Corrigir</button><button type="button" class="btn danger tiny" data-remove-ride="'+esc(r.id)+'">Excluir</button></div></div>').join("")+'</div>':
  '<div class="help">Nenhuma corrida registrada. Ao terminar uma viagem, toque em <b>Registrar corrida</b>, informe quanto recebeu e salve.</div>');
 };
 function historyCards(){
@@ -403,7 +407,9 @@ submit=async function(ev){
    const price=cent(fval(form,"value")),kmText=fval(form,"km"),distance=kmText?num(kmText):null;
    if(!Number.isFinite(price)||price<0)throw Error("Informe o valor da corrida.");
    if(distance!==null&&(!Number.isFinite(distance)||distance<0))throw Error("KM da corrida inválido.");
-   const dt=datetimeLocal(),ride={id:rid(),valueC:price,km:distance,platform:fval(form,"platform"),clock:dt.clock,at:dt.at,source:"manual"};
+   const feeValue=fval(form,"feeShown"),feeShownC=feeValue?cent(feeValue):0;
+   if(!Number.isFinite(feeShownC)||feeShownC<0)throw Error("Taxa informada inválida.");
+   const dt=datetimeLocal(),ride={id:rid(),valueC:price,platformFeeC:feeShownC,km:distance,platform:fval(form,"platform"),clock:dt.clock,at:dt.at,source:"manual"};
    const good=await save(d=>{const s=d.shifts.find(x=>x.id===shift.id);s.rides=s.rides||[];s.rides.push(ride);s.grossC=sumRide(s);s.km=kmRide(s)});
    if(!good)return;
    if(proofFile){const copy=proofFile;proofFile=null;await uploadReceipt(shift.id,ride.id,copy)}
