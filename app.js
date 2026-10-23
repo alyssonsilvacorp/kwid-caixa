@@ -261,7 +261,7 @@ const socialButton=(provider,label,letter)=>'<button type="button" class="social
 loginScreen=function(){
  const modes={login:["Bem-vindo de volta","Acesse seu painel financeiro"],signup:["Comece a dirigir seus números","Crie sua conta gratuitamente"],reset:["Recupere seu acesso","Enviaremos um link de recuperação"],newpass:["Nova senha","Escolha uma nova senha segura"]};
  const [heading,help]=modes[authMode];
- out.innerHTML='<div class="login-ambient"></div><div class="auth auth-premium"><div class="center brand-lockup"><img src="/icon.svg" alt="Símbolo RodaCaixa" width="82" height="82"><div class="auth-kicker">FINANÇAS SOBRE RODAS</div><h1>Roda<span>Caixa</span></h1><p class="slogan">Transforme cada quilômetro em controle, lucro e decisão.</p></div>'+
+ out.innerHTML='<div class="login-ambient"></div><div class="auth auth-premium"><div class="center brand-lockup">'+integratedWheel()+'<div class="auth-kicker">FINANÇAS SOBRE RODAS</div><h1>Roda<span>Caixa</span></h1><p class="slogan">Transforme cada quilômetro em controle, lucro e decisão.</p></div>'+
  '<div class="card auth-card"><h2>'+heading+'</h2><p class="desc">'+help+'</p><form id="authForm">'+(authMode==="newpass"?"":inpt("email","E-mail","email","","required autocomplete=email"))+(authMode==="reset"?"":'<label>Senha<div class="password-wrap"><input name="password" type="password" minlength="8" required autocomplete="'+(authMode==="login"?"current-password":"new-password")+'" placeholder="Sua senha" id="passwordField"><button type="button" class="show-password" data-password-toggle aria-label="Mostrar ou ocultar senha">◉</button></div></label>')+
  '<button type="submit" class="btn block primary-action">'+(authMode==="login"?"Entrar na minha conta":authMode==="signup"?"Criar minha conta":authMode==="reset"?"Enviar link":"Atualizar senha")+' <span>→</span></button></form>'+
  (authMode==="login"||authMode==="signup"?'<div class="social-divider"><span>ou acesse com</span></div>'+socialButton("google","Google",'<svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#4285F4" d="M43.61 24.46c0-1.36-.12-2.7-.35-4H24v7.57h11a9.4 9.4 0 0 1-4.08 6.17v5.13h6.61c3.88-3.57 6.08-8.82 6.08-14.87Z"/><path fill="#34A853" d="M24 44c5.55 0 10.2-1.84 13.6-4.99l-6.6-5.13c-1.84 1.23-4.19 1.96-7 1.96-5.37 0-9.92-3.62-11.54-8.5H5.64v5.28A20 20 0 0 0 24 44Z"/><path fill="#FBBC05" d="M12.46 27.34a12 12 0 0 1 0-7.68v-5.28H5.64a20 20 0 0 0 0 17.24l6.82-5.28Z"/><path fill="#EA4335" d="M24 11.94c3.02 0 5.72 1.04 7.84 3.07l5.89-5.88C34.19 5.83 29.56 4 24 4A20 20 0 0 0 5.64 15.38l6.82 5.28C14.08 15.78 18.63 11.94 24 11.94Z"/></svg>')+socialButton("apple","Apple",'<svg viewBox="0 0 24 24" width="19" height="19" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M17.05 12.536c-.031-3.202 2.609-4.74 2.727-4.812-1.5-2.197-3.828-2.494-4.652-2.518-1.96-.206-3.86 1.157-4.86 1.157-1.004 0-2.545-1.128-4.196-1.098-2.161.032-4.163 1.256-5.277 3.177-2.253 3.901-.577 9.677 1.62 12.843 1.076 1.548 2.356 3.284 4.041 3.22 1.624-.064 2.235-1.048 4.197-1.048 1.961 0 2.51 1.048 4.206 1.016 1.737-.031 2.835-1.578 3.9-3.129 1.24-1.802 1.751-3.548 1.78-3.637-.039-.014-3.409-1.305-3.448-5.189zM13.84 3.63c.934-1.129 1.566-2.699 1.394-4.27-1.347.054-2.977.897-3.942 2.031-.868 1.003-1.629 2.602-1.425 4.12 1.5.116 3.04-.764 3.974-1.881z" transform="translate(1.2 1.5) scale(.84)"/></svg>')+'<div class="social-note">Login Google/Apple disponível após habilitar os provedores.</div>':"")+
@@ -475,6 +475,35 @@ async function previewExtraction(form){
   notify("Confira o valor e os KM sugeridos. Nada foi salvo automaticamente.");
  }catch(err){info.textContent="Leitura automática indisponível: "+err.message+". Você ainda pode digitar os dados e anexar o arquivo.";notify(err.message,true)}
  finally{btn.disabled=false;btn.textContent="Tentar ler dados do arquivo (experimental)"}
+}
+
+
+/* Hero with an integrated 3D-like SVG wheel: no square stock-image cutout. */
+function integratedWheel(){
+ return '<div class="hero-wheel" role="img" aria-label="Roda RodaCaixa com aro metálico tridimensional" tabindex="0">'+
+ '<svg viewBox="0 0 220 220" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>'+
+ '<radialGradient id="rubber" cx=".33" cy=".27" r=".78"><stop stop-color="#39454b"/><stop offset=".39" stop-color="#111c24"/><stop offset=".79" stop-color="#02080d"/><stop offset="1" stop-color="#26343b"/></radialGradient>'+
+ '<linearGradient id="alloy" x1=".05" y1="0" x2=".92" y2="1"><stop stop-color="#f4fff9"/><stop offset=".16" stop-color="#7ab39e"/><stop offset=".32" stop-color="#223e44"/><stop offset=".53" stop-color="#a7f9dc"/><stop offset=".75" stop-color="#152d36"/><stop offset="1" stop-color="#a3fce1"/></linearGradient>'+
+ '<radialGradient id="well"><stop stop-color="#0d3031"/><stop offset=".78" stop-color="#051218"/><stop offset="1" stop-color="#0d1a21"/></radialGradient>'+
+ '<linearGradient id="spoke" x1="0" y1="0" x2=".85" y2="1"><stop stop-color="#f0fff9"/><stop offset=".28" stop-color="#b5d2cb"/><stop offset=".53" stop-color="#395a5c"/><stop offset=".8" stop-color="#d3eee5"/><stop offset="1" stop-color="#34585a"/></linearGradient>'+
+ '<filter id="wheelShadow"><feGaussianBlur stdDeviation="5"/></filter>'+
+ '</defs><ellipse cx="112" cy="201" rx="81" ry="8" fill="#58eeb8" opacity=".13" filter="url(#wheelShadow)"/>'+
+ '<g class="wheel-rotor" transform="translate(110 105) rotate(-14)"><circle r="95" fill="url(#rubber)" stroke="#496263" stroke-width="1.5"/>'+
+ '<circle r="90" fill="none" stroke="#101c23" stroke-width="8" stroke-dasharray="1.2 3" opacity=".73"/>'+
+ '<circle r="82" fill="#132629" stroke="#182e32" stroke-width="5"/>'+
+ '<circle r="75" fill="url(#alloy)" stroke="#9be2cf" stroke-width="2"/>'+
+ '<circle r="67" fill="url(#well)" stroke="#294d4a" stroke-width="4"/>'+
+ '<g fill="url(#spoke)" stroke="#b5e7d4" stroke-width=".6">'+
+ '<path d="M-9-15 -17-64 -5-72 8-61 9-16Z"/>'+
+ '<path d="M-9-15 -17-64 -5-72 8-61 9-16Z" transform="rotate(60)"/>'+
+ '<path d="M-9-15 -17-64 -5-72 8-61 9-16Z" transform="rotate(120)"/>'+
+ '<path d="M-9-15 -17-64 -5-72 8-61 9-16Z" transform="rotate(180)"/>'+
+ '<path d="M-9-15 -17-64 -5-72 8-61 9-16Z" transform="rotate(240)"/>'+
+ '<path d="M-9-15 -17-64 -5-72 8-61 9-16Z" transform="rotate(300)"/></g>'+
+ '<circle r="21" fill="#132c2c" stroke="url(#alloy)" stroke-width="3"/><circle r="12" fill="url(#alloy)" stroke="#c1f1d8" stroke-width="1"/><circle r="6" fill="#24474b"/>'+
+ '<g fill="#c7f3e4"><circle cx="0" cy="-29" r="2.6"/><circle cx="27.58" cy="-8.97" r="2.6"/><circle cx="17.04" cy="23.46" r="2.6"/><circle cx="-17.04" cy="23.46" r="2.6"/><circle cx="-27.58" cy="-8.97" r="2.6"/></g>'+
+ '</g><path d="M54 38a94 94 0 0 1 112 3" fill="none" stroke="#b4ffdd" stroke-width="1" opacity=".55"/></svg>'+
+ '</div>';
 }
 
 start();
