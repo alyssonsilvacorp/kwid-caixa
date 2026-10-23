@@ -427,8 +427,17 @@ async function fileText(file){
   const {data}=await window.Tesseract.recognize(file,"por+eng");return data.text.slice(0,50000);
  }
  if(ext==="pdf"||file.type==="application/pdf"){
-  await loadScript("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.6.82/pdf.min.mjs",()=>!!window.pdfjsLib);
-  return "Não foi possível reconhecer automaticamente este PDF. Use o valor manual.";
+  const lib=await import("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.6.82/pdf.min.mjs");
+  lib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.6.82/pdf.worker.min.mjs";
+  const bytes=new Uint8Array(await file.arrayBuffer());
+  const doc=await lib.getDocument({data:bytes}).promise;
+  let text="";
+  for(let i=1;i<=Math.min(doc.numPages,6);i++){
+   const pg=await doc.getPage(i),body=await pg.getTextContent();
+   text+="\n"+body.items.map(x=>x.str||"").join(" ");
+  }
+  if(!text.trim())throw Error("PDF digitalizado sem texto. Envie print da corrida ou registre manualmente.");
+  return text.slice(0,100000);
  }
  throw Error("Formato sem leitor disponível. Ainda é possível salvar a corrida e anexar o arquivo.");
 }
