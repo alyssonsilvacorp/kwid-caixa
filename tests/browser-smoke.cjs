@@ -53,6 +53,25 @@ async function run(){
   await page.locator('#endShiftForm button[type=submit]').click();
   await page.waitForFunction(()=>!!document.querySelector(".stat-section"));
   assert.match(await page.locator(".stat-section").innerText(),/17,5/);
+  // A new shift with both 99 and Uber; charge 99 package only once.
+  await page.locator(".footnav [data-go=turno]").click();
+  await page.locator("#useMultiple").check();
+  await page.locator('input[name="otherPlatform"][value="Uber"]').check();
+  await page.locator('select[name="plan99"]').selectOption("99-200");
+  assert.equal(await page.locator('input[name="plan99Price"]').inputValue(),"25.99");
+  await page.locator("#startShiftForm input[name=startKm]").fill("43017.5");
+  await page.locator("#startShiftForm button[type=submit]").click();
+  await page.locator(".status-strip").waitFor();
+  await page.locator("[data-open-ride]").click();
+  await page.locator('#rideForm select[name="platform"]').selectOption("Uber");
+  await page.locator('#rideForm input[name="value"]').fill("14.50");
+  await page.locator('#rideForm button[type=submit]').click();
+  await page.waitForFunction(()=>document.querySelector(".live-hero .big")?.textContent?.includes("14,50"));
+  const data=await page.evaluate(()=>JSON.parse(localStorage.getItem("mock_ledger")).data);
+  assert.deepEqual(Array.from(data.shifts[1].platforms),["99","Uber"]);
+  assert.equal(data.shifts[1].rides[0].platform,"Uber");
+  assert.equal(data.expenses.filter(x=>x.kind==="pacote"&&x.planCode==="99-200").length,1);
+  assert.equal(data.expenses.find(x=>x.planCode==="99-200").amountC,2599);
   assert.equal(errors.length,0,errors.join(" | "));
   console.log("PASS: mobile login, start, reload, ride, finish, financial dashboard");
  }finally{await browser.close()}
