@@ -332,6 +332,38 @@ settings=function(){return legacySettings().replace('Backup e sincronização','
 bind=function(){
  legacyBind();
  const $a=sel=>out.querySelector(sel);
+ const setup=$a("#startShiftForm");
+ if(setup){
+  const primary=setup.querySelector('[name="platform"]');
+  const multi=setup.querySelector('[name="useMultiple"]');
+  const extras=setup.querySelector("#otherPlatforms");
+  const rerenderExtras=()=>{
+   const active=new Set([...extras.querySelectorAll('input[name="otherPlatform"]:checked')].map(x=>x.value));
+   extras.innerHTML=availablePlatforms.filter(p=>p!==primary.value).map(p=>
+    '<label class="platform-pill"><input type="checkbox" name="otherPlatform" value="'+esc(p)+'" '+(active.has(p)?"checked":"")+'><span>'+esc(p)+'</span></label>').join("");
+  };
+  const refresh=()=>{
+   $a("#multiAppWrap").classList.toggle("hidden-panel",!multi.checked);
+   const apps=platformSelection(setup);
+   $a("#planBox99").classList.toggle("hidden-panel",!apps.includes("99"));
+   $a("#planBoxUber").classList.toggle("hidden-panel",!apps.includes("Uber"));
+   const p99=setup.querySelector('[name="plan99"]')?.value;
+   $a("#plan99Details").classList.toggle("hidden-panel",p99==="none");
+   const pu=setup.querySelector('[name="planUber"]')?.value;
+   $a("#planUberDetails").classList.toggle("hidden-panel",pu==="variable");
+  };
+  rerenderExtras();refresh();
+  primary.addEventListener("change",()=>{rerenderExtras();refresh()});
+  multi.addEventListener("change",refresh);
+  extras.addEventListener("change",refresh);
+  setup.querySelector('[name="plan99"]').addEventListener("change",ev=>{
+   const preset=tariffPlans99[ev.target.value];
+   const price=setup.querySelector('[name="plan99Price"]');
+   price.value=preset?(preset.priceC/100).toFixed(2):"";
+   refresh();
+  });
+  setup.querySelector('[name="planUber"]').addEventListener("change",refresh);
+ }
  const toggle=(s,hidden)=>{const x=$a(s);if(x)x.classList.toggle("hidden-panel",hidden)};
  $a("[data-open-ride]")?.addEventListener("click",()=>{toggle("#ridePanel",false);toggle("#endPanel",true);$a("#rideForm input[name=value]")?.focus()});
  $a("[data-close-ride]")?.addEventListener("click",()=>{toggle("#ridePanel",true);proofFile=null;proofText=""});
