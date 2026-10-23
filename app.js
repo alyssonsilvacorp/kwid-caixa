@@ -107,7 +107,7 @@ function home(){
  return title("Visão geral","Faturamento, custos operacionais e dinheiro destinado ao carro.")+
  '<div class="hero"><div class="eyebrow">Resultado operacional acumulado</div><div class="big">'+BRL(a.result)+'</div><p class="muted">Estimativa após custos e provisão, não saldo em banco.</p>'+line("Corridas recebidas",BRL(a.gross))+line("Gasolina calculada","− "+BRL(a.fuel))+line("Pacotes e outros custos","− "+BRL(a.packages+a.extra+a.extraShifts))+line("Reserva para desgaste","− "+BRL(a.wear))+'</div>'+
  '<div class="grid"><div class="card"><span class="muted">Para mim</span><div class="number">'+BRL(a.personal)+'</div><span class="mini">Parcela prevista</span></div><div class="card"><span class="muted">Para o carro</span><div class="number">'+BRL(a.car)+'</div><span class="mini">Parcela prevista</span></div></div>'+
- '<div class="card"><div class="eyebrow">Meta de reserva por dia trabalhado</div><div class="big">'+BRL(a.daily)+'</div><p class="muted">Metas com valor e prazo definidos. Não é faturamento bruto necessário.</p>'+line("Turnos registrados",String(finance.shifts.length))+line("KM de trabalho",a.km.toFixed(1)+" km")+line("Receita por KM",a.km?BRL(a.gross/a.km):"—")+line("Resultado por hora",a.mins?BRL(a.result*60/a.mins):"—")+line("Fundo livre do carro",BRL(a.free))+'</div>'+
+ '<div class="card"><div class="eyebrow">Meta de reserva por dia trabalhado</div><div class="big">'+BRL(a.daily)+'</div><p class="muted">Metas com valor e prazo definidos. Não é faturamento bruto necessário.</p>'+line("Turnos registrados",String(finance.shifts.length))+line("KM de trabalho",a.km.toLocaleString("pt-BR",{minimumFractionDigits:1,maximumFractionDigits:1})+" km")+line("Receita por KM",a.km?BRL(a.gross/a.km):"—")+line("Resultado por hora",a.mins?BRL(a.result*60/a.mins):"—")+line("Fundo livre do carro",BRL(a.free))+'</div>'+
  '<button class="btn block" data-go="turno">+ Registrar turno</button><div class="help">Dica: confira os valores de combustível e consumo antes do primeiro turno. Para testar, crie um registro fictício e exclua em seguida.</div>';
 }
 function turns(){
@@ -124,7 +124,7 @@ function turns(){
  '<div class="grid">'+inpt("wear","Desgaste (R$/km)","number",((item?.wearPerKmC??s.wearPerKmC)/100).toFixed(2),"required min=0 step=0.01")+
  inpt("other","Outros custos (R$)","number",((item?.otherC||0)/100).toFixed(2),"min=0 step=0.01")+'</div>'+
  '<label>Observação<textarea name="note">'+esc(item?.note||"")+'</textarea></label><button class="btn block">'+(item?"Salvar alterações":"Salvar turno")+'</button></form>'+
- '<h2>Histórico de turnos</h2><div class="list">'+(finance.shifts.length?finance.shifts.slice().sort((a,b)=>b.date.localeCompare(a.date)).map(x=>'<div class="entry"><div class="row"><b>'+when(x.date)+' · '+esc(x.platform||"99")+'</b><b>'+BRL(x.grossC)+'</b></div><p>'+Number(x.km).toFixed(1)+' km · Odômetro: '+esc(x.odoStart??"—")+' → '+esc(x.odoEnd??"—")+'</p><div class="actions"><button class="btn secondary tiny" data-editturn="'+esc(x.id)+'">Editar</button><button class="btn danger tiny" data-remturn="'+esc(x.id)+'">Excluir</button></div></div>').join(""):'<div class="help">Ainda não há turnos.</div>')+'</div>';
+ '<h2>Histórico de turnos</h2><div class="list">'+(finance.shifts.length?finance.shifts.slice().sort((a,b)=>b.date.localeCompare(a.date)).map(x=>'<div class="entry"><div class="row"><b>'+when(x.date)+' · '+esc(x.platform||"99")+'</b><b>'+BRL(x.grossC)+'</b></div><p>'+Number(x.km).toLocaleString("pt-BR",{minimumFractionDigits:1,maximumFractionDigits:1})+' km · Odômetro: '+esc(x.odoStart??"—")+' → '+esc(x.odoEnd??"—")+'</p><div class="actions"><button class="btn secondary tiny" data-editturn="'+esc(x.id)+'">Editar</button><button class="btn danger tiny" data-remturn="'+esc(x.id)+'">Excluir</button></div></div>').join(""):'<div class="help">Ainda não há turnos.</div>')+'</div>';
 }
 function expenses(){
  return title("Gastos","Pacotes, peças, manutenção e custos adicionais.")+
@@ -179,7 +179,7 @@ function bind(){
  for(const type of ["editturn","remturn","editgoal","remgoal","remexpense","buygoal","upgoal"]){
   out.querySelectorAll("[data-"+type+"]").forEach(x=>x.onclick=()=>action(type,x.dataset[type]));
  }
- const f=$("#turnForm");if(f){const u=()=>{const a=num(fval(f,"os")),b=num(fval(f,"oe"));$("#kmtext").textContent=fval(f,"oe")&&b>a?"KM total calculado: "+(b-a).toFixed(1)+" km":"Preencha início e fim do odômetro (fim maior que início)."};f.addEventListener("input",u);u()}
+ const f=$("#turnForm");if(f){const u=()=>{const a=num(fval(f,"os")),b=num(fval(f,"oe"));$("#kmtext").textContent=fval(f,"oe")&&b>a?"KM total calculado: "+(b-a).toLocaleString("pt-BR",{minimumFractionDigits:1,maximumFractionDigits:1})+" km":"Preencha início e fim do odômetro (fim maior que início)."};f.addEventListener("input",u);u()}
  const up=$("#backup");if(up)up.onchange=async()=>{const file=up.files?.[0];if(!file)return;try{const raw=normalize(JSON.parse(await file.text()));if(!confirm("Substituir os dados nesta conta por "+raw.shifts.length+" turnos, "+raw.expenses.length+" gastos e "+raw.goals.length+" metas? Exporte seu backup antes."))return;await save(d=>Object.assign(d,raw))}catch(err){notify(err.message,true)}finally{up.value=""}};
 }
 async function submit(ev){
@@ -287,9 +287,9 @@ home=function(){
  '<div class="hero premium-hero"><div class="eyebrow">Resultado após custos · acumulado</div><div class="big">'+BRL(a.result)+'</div><p class="muted">Estimativa operacional, não saldo na conta</p><div class="mini-metrics">'+line("Faturamento bruto",BRL(a.gross))+line("Custos e provisões","− "+BRL(a.gross-a.result))+'</div></div>'+
  (active?'<button class="btn block bright-large" data-go="turno"><span class="pulse-dot dark-dot"></span> Continuar meu turno <b>→</b></button>':
  '<button class="btn block bright-large" data-go="turno">▶ Iniciar meu turno <b>→</b></button>')+
- '<div class="stat-section"><div class="stat-item"><div class="stat-name">Faturado hoje</div><div class="stat-number">'+BRL(dailyGross)+'</div><small>'+rideCount+' corrida(s) registrada(s)</small></div><div class="stat-item"><div class="stat-name">Para você</div><div class="stat-number">'+BRL(a.personal)+'</div><small>Disponível estimado</small></div><div class="stat-item"><div class="stat-name">Fundo do carro</div><div class="stat-number">'+BRL(a.car)+'</div><small>Provisão estimada</small></div><div class="stat-item"><div class="stat-name">Km trabalhados</div><div class="stat-number">'+a.km.toFixed(1)+' <small>km</small></div><small>Inclui estimativas em turno ativo</small></div></div>'+
+ '<div class="stat-section"><div class="stat-item"><div class="stat-name">Faturado hoje</div><div class="stat-number">'+BRL(dailyGross)+'</div><small>'+rideCount+' corrida(s) registrada(s)</small></div><div class="stat-item"><div class="stat-name">Para você</div><div class="stat-number">'+BRL(a.personal)+'</div><small>Disponível estimado</small></div><div class="stat-item"><div class="stat-name">Fundo do carro</div><div class="stat-number">'+BRL(a.car)+'</div><small>Provisão estimada</small></div><div class="stat-item"><div class="stat-name">Km trabalhados</div><div class="stat-number">'+a.km.toLocaleString("pt-BR",{minimumFractionDigits:1,maximumFractionDigits:1})+' <small>km</small></div><small>Inclui estimativas em turno ativo</small></div></div>'+
  '<div class="card soft-card"><div class="row"><span>Meta de reserva por dia</span><b class="mint-value">'+BRL(a.daily)+'</b></div><p class="muted">Valor planejado para metas com prazo. Ajuste em Metas.</p><button class="inline-link" data-go="metas">Ver minhas metas →</button></div>'+
- '<h2>Atividade recente</h2><div class="list">'+(recentShifts().length?recentShifts().slice(0,4).map(s=>'<div class="entry"><div class="row"><b>'+esc(when(s.date))+' · '+esc(s.platform||"99")+'</b><b>'+BRL(s.grossC)+'</b></div><p>'+esc(s.status==="active"?"Em andamento":"Encerrado")+' · '+shiftRides(s).length+' corrida(s) · '+(Number(s.km)||0).toFixed(1)+' km</p></div>').join(""):'<div class="help">Seu primeiro turno vai aparecer aqui. Nenhum registro fictício foi criado.</div>')+'</div>';
+ '<h2>Atividade recente</h2><div class="list">'+(recentShifts().length?recentShifts().slice(0,4).map(s=>'<div class="entry"><div class="row"><b>'+esc(when(s.date))+' · '+esc(s.platform||"99")+'</b><b>'+BRL(s.grossC)+'</b></div><p>'+esc(s.status==="active"?"Em andamento":"Encerrado")+' · '+shiftRides(s).length+' corrida(s) · '+(Number(s.km)||0).toLocaleString("pt-BR",{minimumFractionDigits:1,maximumFractionDigits:1})+' km</p></div>').join(""):'<div class="help">Seu primeiro turno vai aparecer aqui. Nenhum registro fictício foi criado.</div>')+'</div>';
 };
 turns=function(){
  const active=activeTurn(),s=finance.settings,last=finance.shifts.filter(t=>t.odoEnd!=null).slice().reverse()[0];
@@ -305,7 +305,7 @@ turns=function(){
  }
  const rides=shiftRides(active),startKm=Number(active.odoStart)||0,at=active.start||"—";
  return '<div class="section-overline"><span class="pulse-dot"></span> TURNO EM ANDAMENTO</div><h1>Boa rota!</h1><p class="desc">Iniciado às <b>'+esc(at)+'</b> em '+esc(when(active.date))+' · '+esc(active.platform||"99")+'. Registre cada corrida em segundos.</p>'+
- '<div class="hero live-hero"><div class="eyebrow">RECEITA DO TURNO</div><div class="big">'+BRL(active.grossC)+'</div><div class="live-metrics"><span>'+rides.length+' corrida(s)</span><span>'+kmRide(active).toFixed(1)+' km em corridas</span></div></div>'+
+ '<div class="hero live-hero"><div class="eyebrow">RECEITA DO TURNO</div><div class="big">'+BRL(active.grossC)+'</div><div class="live-metrics"><span>'+rides.length+' corrida(s)</span><span>'+kmRide(active).toLocaleString("pt-BR",{minimumFractionDigits:1,maximumFractionDigits:1})+' km em corridas</span></div></div>'+
  '<div class="quick-actions"><button class="btn block bright-large" type="button" data-open-ride>＋ Registrar corrida</button><button class="btn secondary block" type="button" data-close-panel>Encerrar turno</button></div>'+
  '<div id="ridePanel" class="card quick-form '+(proofFile?"":"hidden-panel")+'"><div class="quick-head"><b>Nova corrida</b><button type="button" class="icon-close" data-close-ride aria-label="Fechar">✕</button></div>'+
  '<form id="rideForm">'+inpt("value","Valor recebido (R$)","number","","required min=0 step=0.01 inputmode=decimal placeholder=Ex: 12.50")+
@@ -320,12 +320,12 @@ turns=function(){
  inpt("endKm","Odômetro atual (KM do painel)","number","","required min=0 step=0.1 inputmode=decimal placeholder=Ex: 46045")+
  '<div id="endKmInfo" class="field-hint">O total inclui busca, corridas e deslocamentos vazios.</div><button type="submit" class="btn block bright-large">✓ Encerrar meu turno</button></form></div>'+
  '<div class="sectiontop"><h2>Corridas registradas</h2><span class="pill">'+rides.length+' no turno</span></div>'+
- (rides.length?'<div class="list">'+rides.slice().reverse().map((r,i)=>'<div class="entry"><div class="row"><b>'+esc(r.platform||active.platform||"99")+' · '+esc(r.clock||"")+'</b><b>'+BRL(r.valueC)+'</b></div><p>'+esc(r.km==null?"KM não informado":Number(r.km).toFixed(1)+" km")+(r.evidence?.path?' · Comprovante privado salvo':"")+'</p><div class="actions"><button type="button" class="btn secondary tiny" data-edit-ride="'+esc(r.id)+'">Corrigir</button><button type="button" class="btn danger tiny" data-remove-ride="'+esc(r.id)+'">Excluir</button></div></div>').join("")+'</div>':
+ (rides.length?'<div class="list">'+rides.slice().reverse().map((r,i)=>'<div class="entry"><div class="row"><b>'+esc(r.platform||active.platform||"99")+' · '+esc(r.clock||"")+'</b><b>'+BRL(r.valueC)+'</b></div><p>'+esc(r.km==null?"KM não informado":Number(r.km).toLocaleString("pt-BR",{minimumFractionDigits:1,maximumFractionDigits:1})+" km")+(r.evidence?.path?' · Comprovante privado salvo':"")+'</p><div class="actions"><button type="button" class="btn secondary tiny" data-edit-ride="'+esc(r.id)+'">Corrigir</button><button type="button" class="btn danger tiny" data-remove-ride="'+esc(r.id)+'">Excluir</button></div></div>').join("")+'</div>':
  '<div class="help">Nenhuma corrida registrada. Ao terminar uma viagem, toque em <b>Registrar corrida</b>, informe quanto recebeu e salve.</div>');
 };
 function historyCards(){
  const closed=finance.shifts.filter(s=>s.status!=="active").slice().reverse().slice(0,6);
- return closed.length?'<div class="list">'+closed.map(s=>'<div class="entry"><div class="row"><b>'+when(s.date)+' · '+esc(s.platform||"99")+'</b><b>'+BRL(s.grossC)+'</b></div><p>'+Number(s.km||0).toFixed(1)+' km · '+shiftRides(s).length+' corrida(s) · '+esc(s.start||"")+"–"+esc(s.end||"")+'</p><button class="btn danger tiny" type="button" data-delete-closed="'+esc(s.id)+'">Excluir turno</button></div>').join("")+'</div>':'<div class="help">Seu histórico de turnos aparecerá aqui.</div>';
+ return closed.length?'<div class="list">'+closed.map(s=>'<div class="entry"><div class="row"><b>'+when(s.date)+' · '+esc(s.platform||"99")+'</b><b>'+BRL(s.grossC)+'</b></div><p>'+Number(s.km||0).toLocaleString("pt-BR",{minimumFractionDigits:1,maximumFractionDigits:1})+' km · '+shiftRides(s).length+' corrida(s) · '+esc(s.start||"")+"–"+esc(s.end||"")+'</p><button class="btn danger tiny" type="button" data-delete-closed="'+esc(s.id)+'">Excluir turno</button></div>').join("")+'</div>':'<div class="help">Seu histórico de turnos aparecerá aqui.</div>';
 }
 const legacySettings=settings;
 settings=function(){return legacySettings().replace('Backup e sincronização','Dados e backup').replace('Sem internet, nenhum lançamento é salvo.','Sem internet, nenhum lançamento é salvo. Prints e arquivos são enviados somente quando você os anexa.')};
@@ -337,7 +337,7 @@ bind=function(){
  $a("[data-close-ride]")?.addEventListener("click",()=>{toggle("#ridePanel",true);proofFile=null;proofText=""});
  $a("[data-close-panel]")?.addEventListener("click",()=>{toggle("#endPanel",false);toggle("#ridePanel",true)});
  $a("[data-close-end]")?.addEventListener("click",()=>toggle("#endPanel",true));
- $a("#endShiftForm")?.addEventListener("input",()=>{const shift=activeTurn(),input=$a("#endShiftForm input[name=endKm]"),n=num(input.value),diff=n-(Number(shift?.odoStart)||0);$a("#endKmInfo").textContent=Number.isFinite(diff)&&diff>0?"Total do trabalho: "+diff.toFixed(1)+" km (inclui km vazios).":"Odômetro final deve ser maior que o inicial."});
+ $a("#endShiftForm")?.addEventListener("input",()=>{const shift=activeTurn(),input=$a("#endShiftForm input[name=endKm]"),n=num(input.value),diff=n-(Number(shift?.odoStart)||0);$a("#endKmInfo").textContent=Number.isFinite(diff)&&diff>0?"Total do trabalho: "+diff.toLocaleString("pt-BR",{minimumFractionDigits:1,maximumFractionDigits:1})+" km (inclui km vazios).":"Odômetro final deve ser maior que o inicial."});
  $a("#proofUpload")?.addEventListener("change",ev=>{const file=ev.target.files?.[0];if(!file){proofFile=null;return}if(file.size>10*1024*1024){notify("Máximo permitido: 10 MB.",true);ev.target.value="";proofFile=null;return}proofFile=file;proofText="";$a("#proofInfo").textContent="Selecionado: "+file.name+" ("+Math.ceil(file.size/1024)+" KB). Será salvo após confirmar a corrida."});
  $a("[data-read-proof]")?.addEventListener("click",()=>previewExtraction($a("#rideForm")));
  $a("[data-delete-closed]")?.addEventListener("click",ev=>deleteClosed(ev.currentTarget.dataset.deleteClosed));
@@ -376,7 +376,7 @@ submit=async function(ev){
    if(kmRide(shift)>total+0.5&&!confirm("O total de KM das corridas supera os KM do odômetro. Confirma os números?"))return;
    const dt=datetimeLocal();
    const ok=await save(d=>{const s=d.shifts.find(x=>x.id===shift.id);s.status="closed";s.odoEnd=endKm;s.end=dt.clock;s.endedAt=dt.at;s.km=total;s.grossC=sumRide(s)});
-   if(ok){screenName="inicio";render();notify("Turno encerrado às "+dt.clock+" · "+total.toFixed(1)+" km.");}
+   if(ok){screenName="inicio";render();notify("Turno encerrado às "+dt.clock+" · "+total.toLocaleString("pt-BR",{minimumFractionDigits:1,maximumFractionDigits:1})+" km.");}
    return;
   }
  }catch(err){notify(err.message,true)}
