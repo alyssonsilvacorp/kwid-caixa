@@ -168,3 +168,24 @@ body:has(.auth-premium){background:radial-gradient(ellipse 67% 55% at 50% 12%,#1
 .daily-settings-head b{font-size:15px;color:#b5f8d6}
 .daily-settings-head p{font-size:11px;color:#9fc5b6;line-height:1.6;margin:7px 0}
 @media(max-width:370px){.goal-main b{font-size:27px}.goal-head{font-size:10px}}
+
+/* Primary Monday-Sunday target. Shift goal remains a secondary guardrail. */
+.weekly-goal{margin:16px 0;padding:20px 17px;background:linear-gradient(140deg,#123d30,#101e25 78%);border:1px solid #4b896b;border-radius:23px;box-shadow:0 13px 30px #0003,inset 0 1px #b8ffcf1c}
+.weekly-top{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
+.weekly-kicker{font-size:11px;color:#90f0bd;font-weight:850;letter-spacing:1.6px}
+.weekly-dates{font-size:11px;color:#b1d5c4}
+.weekly-number{margin:17px 0;font-size:31px;font-weight:840;letter-spacing:-.9px;color:#e6fff0;white-space:nowrap}
+.weekly-number span{font-size:14px;font-weight:650;letter-spacing:0;color:#9acbb7}
+.weekly-progress{height:12px;border-radius:100px;background:#254338;overflow:hidden;border:1px solid #507b65}
+.weekly-progress>div{height:100%;border-radius:100px;background:linear-gradient(90deg,#5fe0a0,#a5ffd2);transition:width .25s ease}
+.weekly-bottom{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:7px;margin-top:13px}
+.weekly-bottom strong{font-size:13px;color:#e1fff0}
+.weekly-bottom small{color:#a1d1ba;font-size:11px}
+.weekly-help{border-top:1px solid #b7efcf1a;padding-top:11px;margin:13px 0 0;font-size:11px;line-height:1.6;color:#a8c9b6}
+.weekly-success{border-color:#87efb4;background:linear-gradient(135deg,#1b5138,#123427);box-shadow:0 0 23px #73efb11c}
+.weekly-success .weekly-bottom strong{color:#9dfbc7}
+.goal-panel{margin-top:11px;background:#121e23;border-color:#2f4841;box-shadow:none}
+.goal-panel .goal-main b{font-size:24px}
+.goal-panel .goal-head{font-size:10px}
+.goal-panel .goal-caveat{font-size:10px}
+@media(max-width:380px){.weekly-number{font-size:26px}.weekly-number span{font-size:12px}}
