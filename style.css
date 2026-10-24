@@ -145,3 +145,26 @@ body:has(.auth-premium){background:radial-gradient(ellipse 67% 55% at 50% 12%,#1
 .plan-box label{font-size:11px}
 .plan-box .field-hint{font-size:10px;margin:8px 0 3px}
 .plan-details{border-top:1px solid #3a5c4e;margin-top:12px;padding-top:7px}
+
+/* Advisory per-shift earning goal: clear target, progress and health-conscious stop cues */
+.goal-panel{border:1px solid #36584a;border-radius:21px;padding:18px 16px;background:linear-gradient(142deg,#172c28 5%,#132029 75%);box-shadow:inset 0 1px #e5ffef09,0 11px 24px #0002;margin:17px 0}
+.goal-head{display:flex;align-items:center;justify-content:space-between;gap:9px;color:#a4c7b9;font-size:11px;font-weight:830;letter-spacing:1.25px}
+.goal-head strong{font-size:16px;color:#e3fff1;letter-spacing:-.4px}
+.goal-spark{display:inline-grid;place-items:center;background:#204b3d;border:1px solid #40785e;border-radius:50%;width:25px;height:25px;margin-right:7px;color:#90ebbf;font-size:18px;letter-spacing:0}
+.goal-main{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin:16px 0 12px}
+.goal-main b{font-size:32px;letter-spacing:-1px;color:#f2fff9}
+.goal-main span{font-size:11px;color:#a1cbbd;text-align:right}
+.goal-track{height:10px;overflow:hidden;background:#263936;border-radius:99px;border:1px solid #456057}
+.goal-track>div{height:100%;background:linear-gradient(90deg,#55cda0,#86f4bd);border-radius:99px;transition:width .22s ease}
+.goal-foot{display:flex;flex-direction:column;gap:6px;margin-top:12px}
+.goal-foot small{font-size:12px;line-height:1.5;color:#d1eadd}
+.goal-foot .goal-clock{font-weight:730;color:#7ee6b5}
+.goal-caveat{font-size:10px;line-height:1.55;color:#86a9a1;margin:12px 0 0;border-top:1px solid #ffffff12;padding-top:9px}
+.goal-completed{border-color:#6cdfa0;background:linear-gradient(135deg,#1d4538,#122624);box-shadow:0 0 18px #77e9b717}
+.goal-completed .goal-main span,.goal-completed .goal-foot small{color:#a8ffcc;font-weight:780}
+.goal-time-up{border-color:#b99f52}
+.goal-time-up .goal-clock{color:#f5d18c}
+.daily-settings-head{border-top:1px solid #355348;padding-top:16px;margin-top:15px}
+.daily-settings-head b{font-size:15px;color:#b5f8d6}
+.daily-settings-head p{font-size:11px;color:#9fc5b6;line-height:1.6;margin:7px 0}
+@media(max-width:370px){.goal-main b{font-size:27px}.goal-head{font-size:10px}}
