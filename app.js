@@ -5,7 +5,7 @@ const SUPA_URL="https://mdqdttqulwncbrnpbddh.supabase.co";
 const SUPA_KEY="sb_publishable_G4fHYtKJ2JcWraKe4_fUNQ_pdwv2TMG";
 const out=document.getElementById("app"), toast=document.getElementById("toast");
 let client=null,account=null,finance=null,revision=0,screenName="inicio",editId="",authMode="login",saving=false,lastSaved=null;
-const opt={fuelPriceC:665,kmPerL:13,wearPerKmC:15,driverPct:50,workDaysPerWeek:4,vehicleName:"Meu carro",dailyGoalC:15000,maxShiftMinutes:300};
+const opt={fuelPriceC:665,kmPerL:13,wearPerKmC:15,driverPct:50,workDaysPerWeek:4,vehicleName:"Meu carro",dailyGoalC:15000,weeklyGoalC:60000,maxShiftMinutes:300};
 const defaults=()=>({version:3,settings:{...opt},goals:[{id:"tires",name:"2 pneus",targetC:null,importance:"seguranca",status:"planejada"},{id:"part",name:"Peça do carro",targetC:20000,importance:"obrigatoria",status:"planejada"}],shifts:[],expenses:[]});
 const $=sel=>document.querySelector(sel);
 const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -158,8 +158,10 @@ function settings(){
  inpt("wear","Provisão desgaste R$/km","number",(s.wearPerKmC/100).toFixed(2),"required min=0 step=0.01")+
  inpt("pct","Parcela pessoal do resultado (%)","number",s.driverPct,"required min=0 max=100 step=1")+
  inpt("days","Dias de trabalho por semana","number",s.workDaysPerWeek,"required min=1 max=7 step=1")+
- '<div class="daily-settings-head"><b>Meta diária de trabalho</b><p>Objetivo por turno, inclusive quando atravessa a meia-noite. Não bloqueia novas corridas.</p></div>'+
- inpt("dailyGoal","Faturamento bruto desejado por turno (R$)","number",((s.dailyGoalC??15000)/100).toFixed(2),"required min=1 step=0.01 inputmode=decimal")+
+ '<div class="daily-settings-head"><b>Planejamento de ganhos</b><p>A meta principal é semanal (segunda a domingo). O valor por turno é somente uma referência para distribuir os dias e descansar.</p></div>'+
+ inpt("weeklyGoal","Meta semanal de faturamento (R$)","number",((s.weeklyGoalC??60000)/100).toFixed(2),"required min=1 step=0.01 inputmode=decimal")+
+ '<p class="field-hint">Conta todos os turnos iniciados na mesma semana, mesmo que terminem depois da meia-noite. Não reinicia diariamente.</p>'+
+ inpt("dailyGoal","Referência de faturamento por turno (R$)","number",((s.dailyGoalC??15000)/100).toFixed(2),"required min=1 step=0.01 inputmode=decimal")+
  inpt("maxHours","Limite máximo de trabalho (horas)","number",((s.maxShiftMinutes??300)/60).toFixed(1),"required min=0.5 max=12 step=0.5 inputmode=decimal")+
  '<p class="field-hint">Encerre após a última corrida quando atingir a meta. Se o limite de horas chegar primeiro, priorize o descanso. O app não garante lucro.</p>'+
  '<button class="btn block">Salvar configurações</button></form>'+
@@ -209,8 +211,8 @@ async function submit(ev){
   if(await save(d=>{const i=d.goals.findIndex(x=>x.id===g.id);if(i<0)d.goals.push(g);else d.goals[i]={...d.goals[i],...g}}))editId="";
  }
  if(f.id==="settingsForm"){
-  const s={vehicleName:fval(f,"vehicle"),fuelPriceC:cent(fval(f,"fuel")),kmPerL:num(fval(f,"cons")),wearPerKmC:cent(fval(f,"wear")),driverPct:num(fval(f,"pct")),workDaysPerWeek:num(fval(f,"days")),dailyGoalC:cent(fval(f,"dailyGoal")),maxShiftMinutes:Math.round(num(fval(f,"maxHours"))*60)};
-  if(!s.vehicleName||!(s.fuelPriceC>0&&s.kmPerL>0&&positive(s.wearPerKmC)&&s.driverPct>=0&&s.driverPct<=100&&s.workDaysPerWeek>=1&&s.workDaysPerWeek<=7&&Number.isFinite(s.dailyGoalC)&&s.dailyGoalC>=100&&Number.isFinite(s.maxShiftMinutes)&&s.maxShiftMinutes>=30&&s.maxShiftMinutes<=720))throw Error("Configurações inválidas.");
+  const s={vehicleName:fval(f,"vehicle"),fuelPriceC:cent(fval(f,"fuel")),kmPerL:num(fval(f,"cons")),wearPerKmC:cent(fval(f,"wear")),driverPct:num(fval(f,"pct")),workDaysPerWeek:num(fval(f,"days")),dailyGoalC:cent(fval(f,"dailyGoal")),weeklyGoalC:cent(fval(f,"weeklyGoal")),maxShiftMinutes:Math.round(num(fval(f,"maxHours"))*60)};
+  if(!s.vehicleName||!(s.fuelPriceC>0&&s.kmPerL>0&&positive(s.wearPerKmC)&&s.driverPct>=0&&s.driverPct<=100&&s.workDaysPerWeek>=1&&s.workDaysPerWeek<=7&&Number.isFinite(s.dailyGoalC)&&s.dailyGoalC>=100&&Number.isFinite(s.weeklyGoalC)&&s.weeklyGoalC>=100&&Number.isFinite(s.maxShiftMinutes)&&s.maxShiftMinutes>=30&&s.maxShiftMinutes<=720))throw Error("Configurações inválidas.");
   await save(d=>Object.assign(d.settings,s));
  }
  }catch(err){notify(err.message,true)}
