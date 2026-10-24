@@ -293,6 +293,7 @@ home=function(){
  '<div class="hero premium-hero"><div class="eyebrow">Resultado após custos · acumulado</div><div class="big">'+BRL(a.result)+'</div><p class="muted">Estimativa operacional, não saldo na conta</p><div class="mini-metrics">'+line("Faturamento bruto",BRL(a.gross))+line("Custos e provisões","− "+BRL(a.gross-a.result))+'</div></div>'+
  (active?'<button class="btn block bright-large" data-go="turno"><span class="pulse-dot dark-dot"></span> Continuar meu turno <b>→</b></button>':
  '<button class="btn block bright-large" data-go="turno">▶ Iniciar meu turno <b>→</b></button>')+
+ weeklyGoalCard()+
  dailyGoalCard(active)+
  '<div class="stat-section"><div class="stat-item"><div class="stat-name">Faturado hoje</div><div class="stat-number">'+BRL(dailyGross)+'</div><small>'+rideCount+' corrida(s) registrada(s)</small></div><div class="stat-item"><div class="stat-name">Para você</div><div class="stat-number">'+BRL(a.personal)+'</div><small>Disponível estimado</small></div><div class="stat-item"><div class="stat-name">Fundo do carro</div><div class="stat-number">'+BRL(a.car)+'</div><small>Provisão estimada</small></div><div class="stat-item"><div class="stat-name">Km contabilizados</div><div class="stat-number">'+a.km.toLocaleString("pt-BR",{minimumFractionDigits:1,maximumFractionDigits:1})+' <small>km</small></div><small>Conferir odômetro quando disponível</small></div></div>'+
  '<div class="card soft-card"><div class="row"><span>Reserva de desgaste do carro</span><b class="mint-value">'+BRL(a.wear)+'</b></div><div class="row"><span>Reserva de metas do carro</span><b class="mint-value">'+BRL(a.car)+'</b></div><div class="row"><span>Total de reserva do carro</span><b class="mint-value">'+BRL(a.wear+a.car)+'</b></div><p class="muted">Estimativas; não representam valores efetivamente depositados. Combustível é provisionado à parte.</p></div>'+ '<div class="card soft-card"><div class="row"><span>Meta de reserva por dia</span><b class="mint-value">'+BRL(a.daily)+'</b></div><p class="muted">Valor planejado para metas com prazo. Ajuste em Metas.</p><button class="inline-link" data-go="metas">Ver minhas metas →</button></div>'+
@@ -308,7 +309,7 @@ turns=function(){
   inpt("startKm","KM atual no painel (odômetro)","number",last?.odoEnd??"","required min=0 step=0.1 inputmode=decimal placeholder=Ex: 45950")+
   '<div class="field-hint">Data e hora: <b id="clockPreview">'+new Date().toLocaleString("pt-BR")+'</b> · horário do aparelho</div><button class="btn block bright-large" type="submit">▶ Iniciar turno agora</button></form>'+
   '<div class="help">Ainda não sabe o odômetro? Consulte o painel antes de começar. O valor final será informado somente no encerramento.</div>'+
-  dailyGoalCard(null)+
+  weeklyGoalCard()+
   '<h2>Últimos turnos</h2>'+historyCards();
  }
  const rides=shiftRides(active),startKm=Number(active.odoStart)||0,at=active.start||"—";
@@ -639,13 +640,50 @@ function dailyGoalCard(shift){
  if(isLive){state=t.met?"Meta alcançada! Finalize a corrida atual e considere encerrar para descansar.":t.timeReached?"Limite de tempo atingido. Priorize encerrar e descansar, mesmo sem a meta.":"Faltam "+BRL(t.remaining)+" para sua meta de faturamento.";}
  const timeMessage=isLive?(t.elapsed===null?"Tempo não disponível":readableMinutes(t.elapsed)+" rodando · máximo de "+readableMinutes(t.cap)):("Tempo máximo sugerido: "+readableMinutes(t.cap));
  const barLabel=t.met?"Meta alcançada":isLive?BRL(t.remaining)+" restantes":"Seu próximo turno";
- return '<section class="goal-panel '+(t.met?"goal-completed ":"")+(t.timeReached?"goal-time-up ":"")+'" '+(isLive?'data-live="1"':"")+' aria-label="Meta diária de faturamento">'+
- '<div class="goal-head"><span><span class="goal-spark">◎</span> META POR TURNO</span><strong>'+BRL(t.target)+'</strong></div>'+
+ return '<section class="goal-panel '+(t.met?"goal-completed ":"")+(t.timeReached?"goal-time-up ":"")+'" '+(isLive?'data-live="1"':"")+' aria-label="Referência de faturamento por turno">'+
+ '<div class="goal-head"><span><span class="goal-spark">◎</span> REFERÊNCIA POR TURNO</span><strong>'+BRL(t.target)+'</strong></div>'+
  '<div class="goal-main"><b>'+BRL(isLive?t.gross:0)+'</b><span>'+esc(barLabel)+'</span></div>'+
  '<div class="goal-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+t.pct+'"><div style="width:'+t.pct+'%"></div></div>'+
  '<div class="goal-foot"><small>'+esc(state)+'</small><small class="goal-clock" id="goalTimeText">'+esc(timeMessage)+'</small></div>'+
  '<p class="goal-caveat">Meta de faturamento bruto, não de lucro. Combustível e reserva do carro são calculados separadamente. Nunca continue dirigindo cansado para atingir um número.</p>'+
  '</section>';
+}
+
+
+/* Weekly goal: local Monday-Sunday, each shift counted once by its start date. */
+function localDateKey(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
+function weekBounds(anchor=today()){
+ const [y,m,d]=anchor.split("-").map(Number);
+ const dt=new Date(y,m-1,d,12);
+ if(!Number.isFinite(dt.getTime()))throw Error("Data inválida para calcular a meta semanal.");
+ const mondayOffset=(dt.getDay()+6)%7;
+ dt.setDate(dt.getDate()-mondayOffset);
+ const start=localDateKey(dt);
+ dt.setDate(dt.getDate()+6);
+ const end=localDateKey(dt);
+ return {start,end};
+}
+function weeklyGoalState(anchor=today()){
+ const {start,end}=weekBounds(anchor);
+ const weeklyGoalC=Math.max(100,Number(finance?.settings?.weeklyGoalC??opt.weeklyGoalC));
+ const entries=(finance?.shifts||[]).filter(s=>typeof s.date==="string"&&s.date>=start&&s.date<=end);
+ const grossC=entries.reduce((n,s)=>n+(Number(s.grossC)||0),0);
+ const remainingC=Math.max(0,weeklyGoalC-grossC);
+ return {start,end,target:weeklyGoalC,gross:grossC,remaining:remainingC,
+  shifts:entries.length,percent:Math.min(100,Math.round(grossC*100/weeklyGoalC)),met:grossC>=weeklyGoalC};
+}
+function weeklyGoalCard(anchor=today()){
+ const g=weeklyGoalState(anchor);
+ const days=finance?.settings?.workDaysPerWeek??4;
+ const daily=finance?.settings?.dailyGoalC??15000;
+ return '<section class="weekly-goal '+(g.met?"weekly-success":"")+'" aria-label="Meta semanal de ganhos">'+
+ '<div class="weekly-top"><span class="weekly-kicker">META SEMANAL</span><span class="weekly-dates">'+esc(when(g.start))+' – '+esc(when(g.end))+'</span></div>'+
+ '<div class="weekly-number">'+BRL(g.gross)+' <span>/ '+BRL(g.target)+'</span></div>'+
+ '<div class="weekly-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+g.percent+'"><div style="width:'+g.percent+'%"></div></div>'+
+ '<div class="weekly-bottom"><strong>'+(g.met?'Meta semanal alcançada!':BRL(g.remaining)+' para atingir a meta')+'</strong><small>'+g.shifts+' turno(s) nesta semana · '+g.percent+'%</small></div>'+
+ '<p class="weekly-help">'+(g.met?'Você cumpriu a meta semanal. Não precisa ampliar a jornada por obrigação.':
+ 'Planejamento: '+days+' turno(s)/semana · referência de '+BRL(daily)+' por turno. Descanso e segurança vêm primeiro.')+
+ ' Valores brutos da operação, antes dos custos; turnos que atravessam a meia-noite contam pela data de início.</p></section>';
 }
 
 start();
