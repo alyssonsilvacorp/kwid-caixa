@@ -5,7 +5,7 @@ const SUPA_URL="https://mdqdttqulwncbrnpbddh.supabase.co";
 const SUPA_KEY="sb_publishable_G4fHYtKJ2JcWraKe4_fUNQ_pdwv2TMG";
 const out=document.getElementById("app"), toast=document.getElementById("toast");
 let client=null,account=null,finance=null,revision=0,screenName="inicio",editId="",authMode="login",saving=false,lastSaved=null;
-const opt={fuelPriceC:665,kmPerL:13,wearPerKmC:15,driverPct:50,workDaysPerWeek:4,vehicleName:"Meu carro",dailyGoalC:15000,weeklyGoalC:60000,maxShiftMinutes:300};
+const opt={fuelPriceC:665,kmPerL:13,wearPerKmC:15,driverPct:50,workDaysPerWeek:4,vehicleName:"Meu carro",dailyGoalC:15000,weeklyGoalC:60000,weeklyStartDate:null,maxShiftMinutes:300};
 const defaults=()=>({version:3,settings:{...opt},goals:[{id:"tires",name:"2 pneus",targetC:null,importance:"seguranca",status:"planejada"},{id:"part",name:"Peça do carro",targetC:20000,importance:"obrigatoria",status:"planejada"}],shifts:[],expenses:[]});
 const $=sel=>document.querySelector(sel);
 const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -160,7 +160,8 @@ function settings(){
  inpt("days","Dias de trabalho por semana","number",s.workDaysPerWeek,"required min=1 max=7 step=1")+
  '<div class="daily-settings-head"><b>Planejamento de ganhos</b><p>A meta principal é semanal (segunda a domingo). O valor por turno é somente uma referência para distribuir os dias e descansar.</p></div>'+
  inpt("weeklyGoal","Meta semanal de faturamento (R$)","number",((s.weeklyGoalC??60000)/100).toFixed(2),"required min=1 step=0.01 inputmode=decimal")+
- '<p class="field-hint">Conta todos os turnos iniciados na mesma semana, mesmo que terminem depois da meia-noite. Não reinicia diariamente.</p>'+
+ inpt("weeklyStart","Primeira semana válida para a meta (opcional)","date",s.weeklyStartDate||"")+
+ '<p class="field-hint">Use a data de início para não misturar a semana anterior. O turno que atravessa a meia-noite fica na semana em que começou.</p>'+
  inpt("dailyGoal","Referência de faturamento por turno (R$)","number",((s.dailyGoalC??15000)/100).toFixed(2),"required min=1 step=0.01 inputmode=decimal")+
  inpt("maxHours","Limite máximo de trabalho (horas)","number",((s.maxShiftMinutes??300)/60).toFixed(1),"required min=0.5 max=12 step=0.5 inputmode=decimal")+
  '<p class="field-hint">Encerre após a última corrida quando atingir a meta. Se o limite de horas chegar primeiro, priorize o descanso. O app não garante lucro.</p>'+
@@ -211,8 +212,8 @@ async function submit(ev){
   if(await save(d=>{const i=d.goals.findIndex(x=>x.id===g.id);if(i<0)d.goals.push(g);else d.goals[i]={...d.goals[i],...g}}))editId="";
  }
  if(f.id==="settingsForm"){
-  const s={vehicleName:fval(f,"vehicle"),fuelPriceC:cent(fval(f,"fuel")),kmPerL:num(fval(f,"cons")),wearPerKmC:cent(fval(f,"wear")),driverPct:num(fval(f,"pct")),workDaysPerWeek:num(fval(f,"days")),dailyGoalC:cent(fval(f,"dailyGoal")),weeklyGoalC:cent(fval(f,"weeklyGoal")),maxShiftMinutes:Math.round(num(fval(f,"maxHours"))*60)};
-  if(!s.vehicleName||!(s.fuelPriceC>0&&s.kmPerL>0&&positive(s.wearPerKmC)&&s.driverPct>=0&&s.driverPct<=100&&s.workDaysPerWeek>=1&&s.workDaysPerWeek<=7&&Number.isFinite(s.dailyGoalC)&&s.dailyGoalC>=100&&Number.isFinite(s.weeklyGoalC)&&s.weeklyGoalC>=100&&Number.isFinite(s.maxShiftMinutes)&&s.maxShiftMinutes>=30&&s.maxShiftMinutes<=720))throw Error("Configurações inválidas.");
+  const s={vehicleName:fval(f,"vehicle"),fuelPriceC:cent(fval(f,"fuel")),kmPerL:num(fval(f,"cons")),wearPerKmC:cent(fval(f,"wear")),driverPct:num(fval(f,"pct")),workDaysPerWeek:num(fval(f,"days")),dailyGoalC:cent(fval(f,"dailyGoal")),weeklyGoalC:cent(fval(f,"weeklyGoal")),weeklyStartDate:fval(f,"weeklyStart")||null,maxShiftMinutes:Math.round(num(fval(f,"maxHours"))*60)};
+  if(!s.vehicleName||!(s.fuelPriceC>0&&s.kmPerL>0&&positive(s.wearPerKmC)&&s.driverPct>=0&&s.driverPct<=100&&s.workDaysPerWeek>=1&&s.workDaysPerWeek<=7&&Number.isFinite(s.dailyGoalC)&&s.dailyGoalC>=100&&Number.isFinite(s.weeklyGoalC)&&s.weeklyGoalC>=100&&(!s.weeklyStartDate||/^\d{4}-\d{2}-\d{2}$/.test(s.weeklyStartDate))&&Number.isFinite(s.maxShiftMinutes)&&s.maxShiftMinutes>=30&&s.maxShiftMinutes<=720))throw Error("Configurações inválidas.");
   await save(d=>Object.assign(d.settings,s));
  }
  }catch(err){notify(err.message,true)}
@@ -664,12 +665,15 @@ function weekBounds(anchor=today()){
  return {start,end};
 }
 function weeklyGoalState(anchor=today()){
- const {start,end}=weekBounds(anchor);
+ const startDate=finance?.settings?.weeklyStartDate||null;
+ const actualWeek=weekBounds(anchor);
+ const upcoming=Boolean(startDate&&actualWeek.end<startDate);
+ const {start,end}=weekBounds(upcoming?startDate:anchor);
  const weeklyGoalC=Math.max(100,Number(finance?.settings?.weeklyGoalC??opt.weeklyGoalC));
- const entries=(finance?.shifts||[]).filter(s=>typeof s.date==="string"&&s.date>=start&&s.date<=end);
+ const entries=(finance?.shifts||[]).filter(s=>typeof s.date==="string"&&s.date>=start&&s.date<=end&&(!startDate||s.date>=startDate));
  const grossC=entries.reduce((n,s)=>n+(Number(s.grossC)||0),0);
  const remainingC=Math.max(0,weeklyGoalC-grossC);
- return {start,end,target:weeklyGoalC,gross:grossC,remaining:remainingC,
+ return {start,end,startDate,upcoming,target:weeklyGoalC,gross:grossC,remaining:remainingC,
   shifts:entries.length,percent:Math.min(100,Math.round(grossC*100/weeklyGoalC)),met:grossC>=weeklyGoalC};
 }
 function weeklyGoalCard(anchor=today()){
@@ -677,12 +681,13 @@ function weeklyGoalCard(anchor=today()){
  const days=finance?.settings?.workDaysPerWeek??4;
  const daily=finance?.settings?.dailyGoalC??15000;
  return '<section class="weekly-goal '+(g.met?"weekly-success":"")+'" aria-label="Meta semanal de ganhos">'+
- '<div class="weekly-top"><span class="weekly-kicker">META SEMANAL</span><span class="weekly-dates">'+esc(when(g.start))+' – '+esc(when(g.end))+'</span></div>'+
+ '<div class="weekly-top"><span class="weekly-kicker">'+(g.upcoming?'PRÓXIMA META SEMANAL':'META SEMANAL')+'</span><span class="weekly-dates">'+esc(when(g.start))+' – '+esc(when(g.end))+'</span></div>'+
  '<div class="weekly-number">'+BRL(g.gross)+' <span>/ '+BRL(g.target)+'</span></div>'+
  '<div class="weekly-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+g.percent+'"><div style="width:'+g.percent+'%"></div></div>'+
- '<div class="weekly-bottom"><strong>'+(g.met?'Meta semanal alcançada!':BRL(g.remaining)+' para atingir a meta')+'</strong><small>'+g.shifts+' turno(s) nesta semana · '+g.percent+'%</small></div>'+
- '<p class="weekly-help">'+(g.met?'Você cumpriu a meta semanal. Não precisa ampliar a jornada por obrigação.':
- 'Planejamento: '+days+' turno(s)/semana · referência de '+BRL(daily)+' por turno. Descanso e segurança vêm primeiro.')+
+ '<div class="weekly-bottom"><strong>'+(g.upcoming?'Começa em '+when(g.start):g.met?'Meta semanal alcançada!':BRL(g.remaining)+' para atingir a meta')+'</strong><small>'+g.shifts+' turno(s) '+(g.upcoming?'previstos':'nesta semana')+' · '+g.percent+'%</small></div>'+
+ '<p class="weekly-help">'+(g.upcoming?'A próxima meta está agendada. O turno anterior continua no histórico, fora deste progresso.':
+ g.met?'Você cumpriu a meta semanal. Não precisa ampliar a jornada por obrigação.':
+ 'Planejamento flexível: '+days+' turno(s)/semana · referência de '+BRL(daily)+' por turno. Comece conforme disponibilidade e movimento dos aplicativos; descanso primeiro.')+
  ' Valores brutos da operação, antes dos custos; turnos que atravessam a meia-noite contam pela data de início.</p></section>';
 }
 
