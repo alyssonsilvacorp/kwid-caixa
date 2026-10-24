@@ -36,6 +36,12 @@ async function run(){
   await page.locator("#authForm button[type=submit]").click();
   await page.locator(".app-main h1").waitFor();
   assert.match(await page.locator(".app-main h1").innerText(),/Seu trabalho/);
+  assert.match(await page.locator(".goal-panel").innerText(),/R\$\s?150,00/);
+  assert.match(await page.locator(".goal-panel").innerText(),/5h/);
+  await page.locator(".footnav [data-go=ajustes]").click();
+  assert.equal(await page.locator('#settingsForm input[name="dailyGoal"]').inputValue(),"150.00");
+  assert.equal(await page.locator('#settingsForm input[name="maxHours"]').inputValue(),"5.0");
+  await page.locator(".footnav [data-go=inicio]").click();
   await page.locator(".footnav [data-go=turno]").click();
   await page.locator("#startShiftForm input[name=startKm]").fill("43000");
   await page.locator("#startShiftForm button[type=submit]").click();
@@ -48,6 +54,7 @@ async function run(){
   await page.locator('#rideForm input[name="km"]').fill("9.4");
   await page.locator('#rideForm button[type=submit]').click();
   await page.waitForFunction(()=>document.querySelector(".live-hero .big")?.textContent?.includes("20,50"));
+  assert.match(await page.locator(".goal-panel").innerText(),/129,50/);
   await page.locator("[data-close-panel]").click();
   await page.locator('#endShiftForm input[name="endKm"]').fill("43017.5");
   await page.locator('#endShiftForm button[type=submit]').click();
@@ -72,6 +79,13 @@ async function run(){
   assert.equal(data.shifts[1].rides[0].platform,"Uber");
   assert.equal(data.expenses.filter(x=>x.kind==="pacote"&&x.planCode==="99-200").length,1);
   assert.equal(data.expenses.find(x=>x.planCode==="99-200").amountC,2599);
+  await page.locator("[data-open-ride]").click();
+  await page.locator('#rideForm input[name="value"]').fill("140.50");
+  await page.locator('#rideForm button[type=submit]').click();
+  await page.waitForFunction(()=>document.querySelector(".goal-completed"));
+  assert.match(await page.locator(".goal-panel").innerText(),/Meta alcançada/i);
+  assert.match(await page.locator(".goal-panel").innerText(),/finalize a corrida/i);
+  assert.equal((await page.evaluate(()=>JSON.parse(localStorage.getItem("mock_ledger")).data)).shifts[1].grossC,15500);
   assert.equal(errors.length,0,errors.join(" | "));
   console.log("PASS: mobile login, start, reload, ride, finish, financial dashboard");
  }finally{await browser.close()}
