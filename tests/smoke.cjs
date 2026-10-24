@@ -53,6 +53,24 @@ d.shifts.push({id:"same-week",date:"2026-10-24",grossC:42406,km:0,rides:[],statu
 assert.equal(t.weeklyGoalState("2026-10-24").percent,100);
 assert.equal(t.weeklyGoalState("2026-10-24").met,true);
 assert.match(t.weeklyGoalCard("2026-10-24"),/Meta semanal alcançada!/);
+// Starting next Monday excludes old paid trips from the new goal, but preserves the history.
+const scheduled=JSON.parse(JSON.stringify(d));
+scheduled.settings.weeklyStartDate="2026-10-26";
+scheduled.shifts=scheduled.shifts.filter(s=>s.date<"2026-10-26");
+t.setFinance(scheduled);
+assert.equal(scheduled.shifts.length,2);
+let upcoming=t.weeklyGoalState("2026-10-24");
+assert.equal(upcoming.upcoming,true);
+assert.equal(upcoming.start,"2026-10-26");
+assert.equal(upcoming.end,"2026-11-01");
+assert.equal(upcoming.gross,0);
+assert.match(t.weeklyGoalCard("2026-10-24"),/Começa em 26\/10\/2026/);
+assert.match(t.weeklyGoalCard("2026-10-24"),/R\$\s?600,00/);
+assert.equal(t.weeklyGoalState("2026-10-26").gross,0);
+scheduled.shifts.push({id:"new-shift",date:"2026-10-27",grossC:15000,km:0,rides:[],status:"closed"});
+assert.equal(t.weeklyGoalState("2026-10-27").gross,15000);
+assert.equal(t.weeklyGoalState("2026-11-02").gross,0);
+t.setFinance(d);
 const parsed=t.guessAmounts("Valor da corrida R$ 22,50 e percurso de 9,4 km");
 assert.equal(parsed.money,"22,50");
 assert.equal(parsed.dist,"9,4");
