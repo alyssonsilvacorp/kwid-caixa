@@ -291,6 +291,7 @@ home=function(){
  '<div class="hero premium-hero"><div class="eyebrow">Resultado após custos · acumulado</div><div class="big">'+BRL(a.result)+'</div><p class="muted">Estimativa operacional, não saldo na conta</p><div class="mini-metrics">'+line("Faturamento bruto",BRL(a.gross))+line("Custos e provisões","− "+BRL(a.gross-a.result))+'</div></div>'+
  (active?'<button class="btn block bright-large" data-go="turno"><span class="pulse-dot dark-dot"></span> Continuar meu turno <b>→</b></button>':
  '<button class="btn block bright-large" data-go="turno">▶ Iniciar meu turno <b>→</b></button>')+
+ dailyGoalCard(active)+
  '<div class="stat-section"><div class="stat-item"><div class="stat-name">Faturado hoje</div><div class="stat-number">'+BRL(dailyGross)+'</div><small>'+rideCount+' corrida(s) registrada(s)</small></div><div class="stat-item"><div class="stat-name">Para você</div><div class="stat-number">'+BRL(a.personal)+'</div><small>Disponível estimado</small></div><div class="stat-item"><div class="stat-name">Fundo do carro</div><div class="stat-number">'+BRL(a.car)+'</div><small>Provisão estimada</small></div><div class="stat-item"><div class="stat-name">Km contabilizados</div><div class="stat-number">'+a.km.toLocaleString("pt-BR",{minimumFractionDigits:1,maximumFractionDigits:1})+' <small>km</small></div><small>Conferir odômetro quando disponível</small></div></div>'+
  '<div class="card soft-card"><div class="row"><span>Reserva de desgaste do carro</span><b class="mint-value">'+BRL(a.wear)+'</b></div><div class="row"><span>Reserva de metas do carro</span><b class="mint-value">'+BRL(a.car)+'</b></div><div class="row"><span>Total de reserva do carro</span><b class="mint-value">'+BRL(a.wear+a.car)+'</b></div><p class="muted">Estimativas; não representam valores efetivamente depositados. Combustível é provisionado à parte.</p></div>'+ '<div class="card soft-card"><div class="row"><span>Meta de reserva por dia</span><b class="mint-value">'+BRL(a.daily)+'</b></div><p class="muted">Valor planejado para metas com prazo. Ajuste em Metas.</p><button class="inline-link" data-go="metas">Ver minhas metas →</button></div>'+
  '<h2>Atividade recente</h2><div class="list">'+(recentShifts().length?recentShifts().slice(0,4).map(s=>'<div class="entry"><div class="row"><b>'+esc(when(s.date))+' · '+esc(s.platform||"99")+'</b><b>'+BRL(s.grossC)+'</b></div><p>'+esc(s.status==="active"?"Em andamento":"Encerrado")+' · '+(s.reportedTrips||shiftRides(s).length)+' corrida(s) · '+(Number(s.km)||0).toLocaleString("pt-BR",{minimumFractionDigits:1,maximumFractionDigits:1})+' km'+(s.kmProvisional?' (99, provisório)':'')+'</p>'+(s.fuelPurchasedC?'<p>Abastecimento informado: '+BRL(s.fuelPurchasedC)+' (não descontado duas vezes)</p>':"")+'</div>').join(""):'<div class="help">Seu primeiro turno vai aparecer aqui. Nenhum registro fictício foi criado.</div>')+'</div>';
@@ -305,11 +306,13 @@ turns=function(){
   inpt("startKm","KM atual no painel (odômetro)","number",last?.odoEnd??"","required min=0 step=0.1 inputmode=decimal placeholder=Ex: 45950")+
   '<div class="field-hint">Data e hora: <b id="clockPreview">'+new Date().toLocaleString("pt-BR")+'</b> · horário do aparelho</div><button class="btn block bright-large" type="submit">▶ Iniciar turno agora</button></form>'+
   '<div class="help">Ainda não sabe o odômetro? Consulte o painel antes de começar. O valor final será informado somente no encerramento.</div>'+
+  dailyGoalCard(null)+
   '<h2>Últimos turnos</h2>'+historyCards();
  }
  const rides=shiftRides(active),startKm=Number(active.odoStart)||0,at=active.start||"—";
  return '<div class="section-overline"><span class="pulse-dot"></span> TURNO EM ANDAMENTO</div><h1>Boa rota!</h1><p class="desc">Iniciado às <b>'+esc(at)+'</b> em '+esc(when(active.date))+' · '+esc(selectedPlatforms(active).join(" + "))+'. Registre cada corrida em segundos.</p>'+
  '<div class="hero live-hero"><div class="eyebrow">RECEITA DO TURNO</div><div class="big">'+BRL(active.grossC)+'</div><div class="live-metrics"><span>'+rides.length+' corrida(s)</span><span>'+kmRide(active).toLocaleString("pt-BR",{minimumFractionDigits:1,maximumFractionDigits:1})+' km em corridas</span></div></div>'+
+ dailyGoalCard(active)+
  (Array.isArray(active.plans)&&active.plans.length?'<div class="active-plans">'+active.plans.map(p=>'<span>'+esc(p.label)+' · '+BRL(p.priceC)+' '+(p.paidNow?'(custo registrado)':'(já pago)')+'</span>').join("")+'</div>':"")+
  '<div class="quick-actions"><button class="btn block bright-large" type="button" data-open-ride>＋ Registrar corrida</button><button class="btn secondary block" type="button" data-close-panel>Encerrar turno</button></div>'+
  '<div id="ridePanel" class="card quick-form '+(proofFile?"":"hidden-panel")+'"><div class="quick-head"><b>Nova corrida</b><button type="button" class="icon-close" data-close-ride aria-label="Fechar">✕</button></div>'+
@@ -339,6 +342,15 @@ const legacySettings=settings;
 settings=function(){return legacySettings().replace('Backup e sincronização','Dados e backup').replace('Sem internet, nenhum lançamento é salvo.','Sem internet, nenhum lançamento é salvo. Prints e arquivos são enviados somente quando você os anexa.')};
 bind=function(){
  legacyBind();
+ if(goalTimerId){clearInterval(goalTimerId);goalTimerId=null}
+ if(activeTurn()&&out.querySelector(".goal-panel[data-live]")){
+  goalTimerId=setInterval(()=>{
+   const el=out.querySelector(".goal-panel[data-live]");
+   const active=activeTurn();
+   if(el&&active){el.outerHTML=dailyGoalCard(active)}
+   else{clearInterval(goalTimerId);goalTimerId=null}
+  },30000);
+ }
  const $a=sel=>out.querySelector(sel);
  const setup=$a("#startShiftForm");
  if(setup){
@@ -601,6 +613,37 @@ function planChoices(form,platforms){
   }
  }
  return choices;
+}
+
+
+/* A daily driving goal is per shift, never reset at midnight. Safely advisory, not a guarantee of profit. */
+let goalTimerId=null;
+function dailyGoalState(shift){
+ const settings=finance?.settings||opt;
+ const target=Math.max(100,Math.round(Number(shift?.dailyGoalC??settings.dailyGoalC??15000)));
+ const cap=Math.max(30,Math.round(Number(shift?.maxShiftMinutes??settings.maxShiftMinutes??300)));
+ const gross=Math.max(0,Number(shift?.grossC)||0);
+ const start=shift?.startedAt?Date.parse(shift.startedAt):NaN;
+ const elapsed=shift?.status==="active"&&Number.isFinite(start)?Math.max(0,Math.floor((Date.now()-start)/60000)):null;
+ return {target,cap,gross,pct:Math.min(100,Math.max(0,Math.round(gross*100/target))),remaining:Math.max(0,target-gross),met:gross>=target,elapsed,timeReached:elapsed!==null&&elapsed>=cap};
+}
+function readableMinutes(total){
+ const n=Math.max(0,Math.floor(total)),h=Math.floor(n/60),m=n%60;
+ return (h?String(h)+"h":"")+(m?String(m).padStart(h?2:1,"0")+"min":"");
+}
+function dailyGoalCard(shift){
+ const t=dailyGoalState(shift),isLive=shift?.status==="active";
+ let state="Comece um turno e acompanhe sua meta aqui.";
+ if(isLive){state=t.met?"Meta alcançada! Finalize a corrida atual e considere encerrar para descansar.":t.timeReached?"Limite de tempo atingido. Priorize encerrar e descansar, mesmo sem a meta.":"Faltam "+BRL(t.remaining)+" para sua meta de faturamento.";}
+ const timeMessage=isLive?(t.elapsed===null?"Tempo não disponível":readableMinutes(t.elapsed)+" rodando · máximo de "+readableMinutes(t.cap)):("Tempo máximo sugerido: "+readableMinutes(t.cap));
+ const barLabel=t.met?"Meta alcançada":isLive?BRL(t.remaining)+" restantes":"Seu próximo turno";
+ return '<section class="goal-panel '+(t.met?"goal-completed ":"")+(t.timeReached?"goal-time-up ":"")+'" '+(isLive?'data-live="1"':"")+' aria-label="Meta diária de faturamento">'+
+ '<div class="goal-head"><span><span class="goal-spark">◎</span> META POR TURNO</span><strong>'+BRL(t.target)+'</strong></div>'+
+ '<div class="goal-main"><b>'+BRL(isLive?t.gross:0)+'</b><span>'+esc(barLabel)+'</span></div>'+
+ '<div class="goal-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+t.pct+'"><div style="width:'+t.pct+'%"></div></div>'+
+ '<div class="goal-foot"><small>'+esc(state)+'</small><small class="goal-clock" id="goalTimeText">'+esc(timeMessage)+'</small></div>'+
+ '<p class="goal-caveat">Meta de faturamento bruto, não de lucro. Combustível e reserva do carro são calculados separadamente. Nunca continue dirigindo cansado para atingir um número.</p>'+
+ '</section>';
 }
 
 start();
