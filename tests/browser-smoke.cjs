@@ -36,10 +36,14 @@ async function run(){
   await page.locator("#authForm button[type=submit]").click();
   await page.locator(".app-main h1").waitFor();
   assert.match(await page.locator(".app-main h1").innerText(),/Seu trabalho/);
+  assert.match(await page.locator(".weekly-goal").innerText(),/600,00/);
+  assert.match(await page.locator(".weekly-goal").innerText(),/600,00 para atingir a meta/);
+
   assert.match(await page.locator(".goal-panel").innerText(),/R\$\s?150,00/);
   assert.match(await page.locator(".goal-panel").innerText(),/5h/);
   await page.locator(".footnav [data-go=ajustes]").click();
   assert.equal(await page.locator('#settingsForm input[name="dailyGoal"]').inputValue(),"150.00");
+  assert.equal(await page.locator('#settingsForm input[name="weeklyGoal"]').inputValue(),"600.00");
   assert.equal(await page.locator('#settingsForm input[name="maxHours"]').inputValue(),"5.0");
   await page.locator(".footnav [data-go=inicio]").click();
   await page.locator(".footnav [data-go=turno]").click();
