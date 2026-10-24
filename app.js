@@ -5,7 +5,7 @@ const SUPA_URL="https://mdqdttqulwncbrnpbddh.supabase.co";
 const SUPA_KEY="sb_publishable_G4fHYtKJ2JcWraKe4_fUNQ_pdwv2TMG";
 const out=document.getElementById("app"), toast=document.getElementById("toast");
 let client=null,account=null,finance=null,revision=0,screenName="inicio",editId="",authMode="login",saving=false,lastSaved=null;
-const opt={fuelPriceC:665,kmPerL:13,wearPerKmC:15,driverPct:50,workDaysPerWeek:4,vehicleName:"Meu carro"};
+const opt={fuelPriceC:665,kmPerL:13,wearPerKmC:15,driverPct:50,workDaysPerWeek:4,vehicleName:"Meu carro",dailyGoalC:15000,maxShiftMinutes:300};
 const defaults=()=>({version:3,settings:{...opt},goals:[{id:"tires",name:"2 pneus",targetC:null,importance:"seguranca",status:"planejada"},{id:"part",name:"Peça do carro",targetC:20000,importance:"obrigatoria",status:"planejada"}],shifts:[],expenses:[]});
 const $=sel=>document.querySelector(sel);
 const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -158,6 +158,10 @@ function settings(){
  inpt("wear","Provisão desgaste R$/km","number",(s.wearPerKmC/100).toFixed(2),"required min=0 step=0.01")+
  inpt("pct","Parcela pessoal do resultado (%)","number",s.driverPct,"required min=0 max=100 step=1")+
  inpt("days","Dias de trabalho por semana","number",s.workDaysPerWeek,"required min=1 max=7 step=1")+
+ '<div class="daily-settings-head"><b>Meta diária de trabalho</b><p>Objetivo por turno, inclusive quando atravessa a meia-noite. Não bloqueia novas corridas.</p></div>'+
+ inpt("dailyGoal","Faturamento bruto desejado por turno (R$)","number",((s.dailyGoalC??15000)/100).toFixed(2),"required min=1 step=0.01 inputmode=decimal")+
+ inpt("maxHours","Limite máximo de trabalho (horas)","number",((s.maxShiftMinutes??300)/60).toFixed(1),"required min=0.5 max=12 step=0.5 inputmode=decimal")+
+ '<p class="field-hint">Encerre após a última corrida quando atingir a meta. Se o limite de horas chegar primeiro, priorize o descanso. O app não garante lucro.</p>'+
  '<button class="btn block">Salvar configurações</button></form>'+
  '<div class="card"><h2>Backup e sincronização</h2>'+line("Conta",account.email||"—")+line("Revisão do banco",String(revision))+
  line("Última gravação",lastSaved?new Date(lastSaved).toLocaleString("pt-BR"):"Nenhuma")+
@@ -205,8 +209,8 @@ async function submit(ev){
   if(await save(d=>{const i=d.goals.findIndex(x=>x.id===g.id);if(i<0)d.goals.push(g);else d.goals[i]={...d.goals[i],...g}}))editId="";
  }
  if(f.id==="settingsForm"){
-  const s={vehicleName:fval(f,"vehicle"),fuelPriceC:cent(fval(f,"fuel")),kmPerL:num(fval(f,"cons")),wearPerKmC:cent(fval(f,"wear")),driverPct:num(fval(f,"pct")),workDaysPerWeek:num(fval(f,"days"))};
-  if(!s.vehicleName||!(s.fuelPriceC>0&&s.kmPerL>0&&positive(s.wearPerKmC)&&s.driverPct>=0&&s.driverPct<=100&&s.workDaysPerWeek>=1&&s.workDaysPerWeek<=7))throw Error("Configurações inválidas.");
+  const s={vehicleName:fval(f,"vehicle"),fuelPriceC:cent(fval(f,"fuel")),kmPerL:num(fval(f,"cons")),wearPerKmC:cent(fval(f,"wear")),driverPct:num(fval(f,"pct")),workDaysPerWeek:num(fval(f,"days")),dailyGoalC:cent(fval(f,"dailyGoal")),maxShiftMinutes:Math.round(num(fval(f,"maxHours"))*60)};
+  if(!s.vehicleName||!(s.fuelPriceC>0&&s.kmPerL>0&&positive(s.wearPerKmC)&&s.driverPct>=0&&s.driverPct<=100&&s.workDaysPerWeek>=1&&s.workDaysPerWeek<=7&&Number.isFinite(s.dailyGoalC)&&s.dailyGoalC>=100&&Number.isFinite(s.maxShiftMinutes)&&s.maxShiftMinutes>=30&&s.maxShiftMinutes<=720))throw Error("Configurações inválidas.");
   await save(d=>Object.assign(d.settings,s));
  }
  }catch(err){notify(err.message,true)}
@@ -392,7 +396,7 @@ submit=async function(ev){
    const od=num(fval(form,"startKm")),platform=fval(form,"platform");if(!Number.isFinite(od)||od<0)throw Error("Informe o KM inicial indicado no painel.");
    const platforms=platformSelection(form),plans=planChoices(form,platforms);
    const dt=datetimeLocal();
-   const shift={id:rid(),status:"active",date:dt.date,platform,platforms,plans,start:dt.clock,startedAt:dt.at,startedTimezone:dt.zone,odoStart:od,odoEnd:null,end:null,rides:[],grossC:0,km:0,otherC:0,fuelPriceC:finance.settings.fuelPriceC,kmPerL:finance.settings.kmPerL,wearPerKmC:finance.settings.wearPerKmC,note:""};
+   const shift={id:rid(),status:"active",date:dt.date,platform,platforms,plans,start:dt.clock,startedAt:dt.at,startedTimezone:dt.zone,odoStart:od,odoEnd:null,end:null,rides:[],grossC:0,km:0,otherC:0,fuelPriceC:finance.settings.fuelPriceC,kmPerL:finance.settings.kmPerL,wearPerKmC:finance.settings.wearPerKmC,dailyGoalC:finance.settings.dailyGoalC??15000,maxShiftMinutes:finance.settings.maxShiftMinutes??300,note:""};
    if(await save(d=>{
     d.shifts.push(shift);
     for(const plan of plans){if(!plan.paidNow)continue;
