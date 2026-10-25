@@ -109,6 +109,17 @@ async function run(){
   assert.equal(db.carProject.items.length,1);
   assert.equal(db.carProject.payments.length,0);
   assert.equal(db.expenses.length,1);
+  assert.equal(await page.locator(".car-combo").count(),5);
+  await page.locator('.car-item [data-project-action="edititem"]').click();
+  await page.locator('#carItemForm input[name="target"]').fill("55.50");
+  await page.locator('#carItemForm button[type="submit"]').click();
+  await page.waitForFunction(()=>document.querySelector(".car-price-history")?.textContent?.includes("Histórico de preços"));
+  db=await page.evaluate(()=>JSON.parse(localStorage.getItem("mock_ledger")).data);
+  assert.equal(db.carProject.items[0].targetC,5550);
+  assert.equal(db.carProject.items[0].priceHistory.length,1);
+  assert.equal(db.carProject.items[0].priceHistory[0].oldC,5000);
+  assert.equal(db.carProject.items[0].priceHistory[0].newC,5550);
+  assert.equal(await projectBalance(),balanceBefore);
   await page.locator('.car-item [data-project-action="addpay"]').click();
   await page.locator('#carPaymentForm input[name="amount"]').fill("20.00");
   page.once("dialog",dialog=>dialog.accept());
@@ -167,6 +178,31 @@ async function run(){
   assert.equal(db.carProject.payments.length,0);
   assert.equal(db.expenses.length,2);
 
+  // Conditional lighting/air-duct goals require compatibility check before recording purchase.
+  await page.locator("#carItemSection summary").click();
+  await page.locator('#carItemForm input[name="name"]').fill("Kit LED teste condicionado");
+  await page.locator('#carItemForm input[name="target"]').fill("20.00");
+  await page.locator('#carItemForm input[name="requiresVerification"]').check();
+  await page.locator('#carItemForm button[type="submit"]').click();
+  await page.waitForFunction(()=>document.querySelector(".car-item")?.textContent.includes("Kit LED teste condicionado"));
+  await page.locator('.car-item [data-project-action="addpay"]').click();
+  await page.locator('#carPaymentForm input[name="amount"]').fill("3.00");
+  await page.locator('#carPaymentForm button[type="submit"]').click();
+  await page.waitForFunction(()=>document.querySelector("#toast")?.textContent?.includes("compatibilidade"));
+  db=await page.evaluate(()=>JSON.parse(localStorage.getItem("mock_ledger")).data);
+  assert.equal(db.carProject.payments.length,0);
+  await page.locator('.car-item [data-project-action="edititem"]').click();
+  await page.locator('#carItemForm input[name="verificationConfirmed"]').check();
+  await page.locator('#carItemForm button[type="submit"]').click();
+  await page.waitForFunction(()=>JSON.parse(localStorage.getItem("mock_ledger")).data.carProject.items[0].verificationConfirmed===true);
+  await page.locator('.car-item [data-project-action="addpay"]').click();
+  await page.locator('#carPaymentForm input[name="amount"]').fill("3.00");
+  page.once("dialog",dialog=>dialog.accept());
+  await page.locator('#carPaymentForm button[type="submit"]').click();
+  await page.waitForFunction(()=>document.querySelector(".car-payment-history"));
+  db=await page.evaluate(()=>JSON.parse(localStorage.getItem("mock_ledger")).data);
+  assert.equal(db.carProject.payments.length,1);
+  assert.equal(db.carProject.items[0].verificationConfirmed,true);
   assert.equal(errors.length,0,errors.join(" | "));
   console.log("PASS: mobile login, start, reload, ride, finish, financial dashboard");
  }finally{await browser.close()}
