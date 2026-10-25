@@ -695,7 +695,7 @@ function weeklyGoalCard(anchor=today()){
 /* Project of the car — one source of reserve: existing compute().car + compute().wear.
    Purchases paid from this fund are debited here, NOT duplicated in operating expenses. */
 let editCarItemId="",editCarPaymentId="",newPaymentItemId="";
-const projectCategories=[["mecanica","Mecânica"],["pneus","Pneus"],["iluminacao","Iluminação"],["exterior","Exterior"],["interior","Interior"],["servicos","Serviços e instalação"]];
+const projectCategories=[["mecanica","Mecânica"],["pneus","Pneus"],["iluminacao","Iluminação"],["exterior","Exterior"],["interior","Interior"]];
 const projectStates=[["planejado","Planejado"],["reservando","Reservando"],["comprado","Comprado"],["instalado","Instalado"],["cancelado","Cancelado"]];
 const projectCombos=[
  {id:"seguranca",title:"1 · Pneus e mecânica",priority:1,desc:"Prioridade máxima: pneus; duto somente após diagnóstico e compatibilidade."},
@@ -817,7 +817,7 @@ function carProjectPage(){
  '<div class="car-combo-list">'+comboCards+'</div>'+
  '<div class="car-section-head"><h2>Produtos individuais</h2><span>'+ordered.length+' registros</span></div>'+
  '<div class="car-items">'+(list||'<p>Nenhuma meta cadastrada.</p>')+'</div>'+
- '<details class="car-form-section" '+(item?'open':"")+' id="carItemSection"><summary>'+(item?'Editar item: '+esc(item.name):'+ Adicionar meta ou serviço')+'</summary>'+
+ '<details class="car-form-section" '+(item?'open':"")+' id="carItemSection"><summary>'+(item?'Editar item: '+esc(item.name):'+ Adicionar meta de compra')+'</summary>'+
  '<form id="carItemForm">'+
  inpt("name","Nome","text",item?.name||"","required maxlength=120")+
  '<div class="grid">'+inpt("code","Código","text",item?.code||"","maxlength=25")+
@@ -879,17 +879,27 @@ submit=async function(ev){
    const targetText=fval(form,"target"),amount=targetText!==""?cent(targetText):null;
    const category=fval(form,"category"),status=fval(form,"status"),bundle=fval(form,"bundle");
    const active=new FormData(form).has("active");
+   const provisional=new FormData(form).has("priceProvisional");
+   const mustVerify=["kwid-a1","kwid-c1","kwid-c2"].includes(editCarItemId)||new FormData(form).has("requiresVerification");
+   const verified=new FormData(form).has("verificationConfirmed");
    const notes=fval(form,"notes");
    if(!name||name.length>120||!Number.isInteger(qty)||qty<1||qty>99||!Number.isInteger(priority)||priority<1||priority>5||
       !projectCategories.some(c=>c[0]===category)||!projectStates.some(c=>c[0]===status)||
       (amount!==null&&(!Number.isSafeInteger(amount)||amount<0)))throw Error("Revise os dados da meta.");
    const id=editCarItemId||rid();
-   const item={id,name,code,quantity:qty,priority,category,status,bundle:bundle||null,active,targetC:amount,notes};
+   const item={id,name,code,quantity:qty,priority,category,status,bundle:bundle||null,active,targetC:amount,notes,
+    priceProvisional:provisional,requiresVerification:mustVerify,verificationConfirmed:verified};
    if(await save(d=>{
     d.carProject=d.carProject||defaults().carProject;
     const pos=d.carProject.items.findIndex(i=>i.id===id);
-    if(pos>=0)d.carProject.items[pos]={...d.carProject.items[pos],...item};
-    else d.carProject.items.push(item);
+    const old=pos>=0?d.carProject.items[pos]:null;
+    const history=Array.isArray(old?.priceHistory)?old.priceHistory.slice():[];
+    if(old&&old.targetC!==amount)history.push({date:today(),oldC:old.targetC??null,newC:amount,reason:"Revisão manual do preço de referência"});
+    const verificationDate=verified?(old?.verificationConfirmed?old.verificationDate:today()):null;
+    const next={...old,...item,verificationDate,priceHistory:history};
+    if(pos>=0)d.carProject.items[pos]=next;
+    else d.carProject.items.push(next);
+    reconcileProjectPaymentStates(d,[id]);
    })){editCarItemId="";render();notify("Meta salva. Nenhum valor foi debitado.");}
    return;
   }
@@ -899,6 +909,8 @@ submit=async function(ev){
    const amountInput=cent(fval(form,"amount"));
    const item=projectItem(itemId),old=(finance.carProject?.payments||[]).find(p=>p.id===editCarPaymentId);
    if(!item||item.status==="cancelado"||item.active===false)throw Error("Escolha uma meta ativa.");
+   if((item.requiresVerification||["kwid-a1","kwid-c1","kwid-c2"].includes(item.id))&&!item.verificationConfirmed)
+     throw Error("Antes de registrar a compra, confirme a necessidade, a compatibilidade e a segurança do item com o mecânico. Edite a meta e marque a verificação realizada.");
    if(!projectSources.some(x=>x[0]===source)||!projectTypes.some(x=>x[0]===type))throw Error("Origem ou tipo inválidos.");
    if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||date>today())throw Error("Informe a data real do pagamento, não uma data futura.");
    let price=amountInput,link=null;
