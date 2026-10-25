@@ -814,5 +814,127 @@ function carProjectPage(){
  '<div class="help">Prioridade de segurança: inspeção da trepidação e estado dos pneus. LED externo, capas de banco e demais acessórios dependem de compatibilidade e, quando aplicável, regularidade legal. Instalação somente após avaliação.</div>';
 }
 
+
+/* Forms and atomic actions share save_driver_ledger revision-safe persistence. */
+goals=carProjectPage;
+const projectPreviousSubmit=submit;
+submit=async function(ev){
+ const form=ev.currentTarget,kind=form?.id;
+ if(kind!=="carItemForm"&&kind!=="carPaymentForm")return projectPreviousSubmit(ev);
+ ev.preventDefault();
+ try{
+  if(kind==="carItemForm"){
+   const name=fval(form,"name").trim(),code=fval(form,"code").trim();
+   const qty=Number(fval(form,"quantity")),priority=Number(fval(form,"priority"));
+   const targetText=fval(form,"target"),amount=targetText!==""?cent(targetText):null;
+   const category=fval(form,"category"),status=fval(form,"status"),bundle=fval(form,"bundle");
+   const active=new FormData(form).has("active");
+   const notes=fval(form,"notes");
+   if(!name||name.length>120||!Number.isInteger(qty)||qty<1||qty>99||!Number.isInteger(priority)||priority<1||priority>5||
+      !projectCategories.some(c=>c[0]===category)||!projectStates.some(c=>c[0]===status)||
+      (amount!==null&&(!Number.isSafeInteger(amount)||amount<0)))throw Error("Revise os dados da meta.");
+   const id=editCarItemId||rid();
+   const item={id,name,code,quantity:qty,priority,category,status,bundle:bundle||null,active,targetC:amount,notes};
+   if(await save(d=>{
+    d.carProject=d.carProject||defaults().carProject;
+    const pos=d.carProject.items.findIndex(i=>i.id===id);
+    if(pos>=0)d.carProject.items[pos]={...d.carProject.items[pos],...item};
+    else d.carProject.items.push(item);
+   })){editCarItemId="";render();notify("Meta salva. Nenhum valor foi debitado.");}
+   return;
+  }
+  if(kind==="carPaymentForm"){
+   const itemId=fval(form,"itemId"),source=fval(form,"source"),type=fval(form,"type"),
+    date=fval(form,"date"),expenseId=fval(form,"expenseId"),note=fval(form,"note");
+   const amountInput=cent(fval(form,"amount"));
+   const item=projectItem(itemId),old=(finance.carProject?.payments||[]).find(p=>p.id===editCarPaymentId);
+   if(!item||item.status==="cancelado"||item.active===false)throw Error("Escolha uma meta ativa.");
+   if(!projectSources.some(x=>x[0]===source)||!projectTypes.some(x=>x[0]===type))throw Error("Origem ou tipo inválidos.");
+   if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||date>today())throw Error("Informe a data real do pagamento, não uma data futura.");
+   let price=amountInput,link=null;
+   if(source==="despesa"){
+    const e=finance.expenses.find(e=>e.id===expenseId);
+    if(!e)throw Error("Selecione uma despesa operacional já registrada.");
+    if(finance.carProject.payments.some(x=>x.source==="despesa"&&x.expenseId===expenseId&&x.id!==old?.id))
+      throw Error("Esta despesa já está vinculada a outra meta. Não é permitido duplicar.");
+    price=Number(e.amountC);link=e.id;
+    if(amountInput!==price)throw Error("O valor precisa ser igual ao da despesa já registrada: "+BRL(price)+".");
+   }
+   if(!Number.isSafeInteger(price)||price<=0)throw Error("Informe o valor efetivamente pago.");
+   const wasFund=old?.source==="fundo"?(Number(old.amountC)||0):0;
+   if(source==="fundo"&&price>projectSummary().available+wasFund)
+     throw Error("Saldo do fundo insuficiente. Disponível: "+BRL(projectSummary().available+wasFund)+". Não crie um depósito fictício.");
+   const newPay={id:old?.id||rid(),itemId,source,type,date,amountC:price,expenseId:link,note};
+   const label=source==="fundo"?"O saldo do fundo será reduzido uma única vez.":source==="despesa"?"Será apenas vinculada a despesa já contabilizada, sem novo débito.":"Pagamento de fora do fundo; a reserva não muda.";
+   if(!confirm("Confirmar pagamento REAL de "+BRL(price)+" em "+item.name+"?\n"+label))return;
+   if(await save(d=>{
+    const p=d.carProject||defaults().carProject;
+    const at=p.payments.findIndex(x=>x.id===newPay.id);
+    if(at>=0)p.payments[at]=newPay;else p.payments.push(newPay);
+    d.carProject=p;
+    const g=p.items.find(x=>x.id===itemId);
+    if(g&&["planejado","reservando"].includes(g.status)){
+     const paid=p.payments.filter(x=>x.itemId===itemId).reduce((n,x)=>{
+      const linked=x.source==="despesa"?d.expenses.find(e=>e.id===x.expenseId):null;
+      return n+(x.source==="despesa"?(Number(linked?.amountC)||0):(Number(x.amountC)||0));
+     },0);
+     if(g.targetC!=null&&paid>=g.targetC)g.status="comprado";
+     else if(paid>0)g.status="reservando";
+    }
+   })){editCarPaymentId="";newPaymentItemId="";render();notify("Pagamento confirmado e registrado uma única vez.");}
+   return;
+  }
+ }catch(err){notify(err.message||"Falha no lançamento.",true)}
+};
+const projectPreviousAction=action;
+action=async function(name,id){
+ if(name==="remexpense"&&finance?.carProject?.payments?.some(p=>p.source==="despesa"&&p.expenseId===id)){
+  notify("Essa despesa está vinculada ao Projeto do Carro. Exclua primeiro o vínculo no histórico, para preservar a auditoria.",true);return;
+ }
+ return projectPreviousAction(name,id);
+};
+const projectPreviousBind=bind;
+bind=function(){
+ projectPreviousBind();
+ out.querySelectorAll("[data-project-action]").forEach(button=>button.addEventListener("click",async()=>{
+  const name=button.dataset.projectAction,id=button.dataset.projectId||"";
+  if(name==="edititem"){editCarItemId=id;editCarPaymentId="";newPaymentItemId="";render();out.querySelector("#carItemSection")?.scrollIntoView({behavior:"smooth",block:"start"});return}
+  if(name==="addpay"){newPaymentItemId=id;editCarPaymentId="";editCarItemId="";render();out.querySelector("#carPaymentSection")?.scrollIntoView({behavior:"smooth",block:"start"});return}
+  if(name==="editpay"){editCarPaymentId=id;editCarItemId="";newPaymentItemId="";render();out.querySelector("#carPaymentSection")?.scrollIntoView({behavior:"smooth",block:"start"});return}
+  if(name==="clearitem"){editCarItemId="";render();return}
+  if(name==="clearpay"){editCarPaymentId="";newPaymentItemId="";render();return}
+  if(name==="delpay"){
+   const payment=finance.carProject.payments.find(p=>p.id===id);if(!payment)return;
+   if(!confirm("Excluir este pagamento do histórico? Se ele foi pago com o fundo, o valor voltará ao saldo CALCULADO. Isso não estorna nenhum pagamento real."))return;
+   await save(d=>{d.carProject.payments=d.carProject.payments.filter(p=>p.id!==id)});
+   return;
+  }
+  if(name==="delitem"){
+   const g=projectItem(id);if(!g)return;
+   if(finance.carProject.payments.some(p=>p.itemId===id)){notify("Existe histórico de pagamentos neste item. Para preservar a auditoria, altere o status para Cancelado.",true);return}
+   if(!confirm("Excluir a meta planejada "+g.name+"? Não haverá movimentação financeira."))return;
+   await save(d=>{d.carProject.items=d.carProject.items.filter(x=>x.id!==id)});
+   return;
+  }
+  if(name==="install"){
+   const g=projectItem(id);if(!g||g.status!=="comprado")return;
+   if(!confirm("Confirmar que "+g.name+" já foi instalado? Esta ação não registra pagamento nem despesa."))return;
+   await save(d=>{const item=d.carProject.items.find(x=>x.id===id);if(item)item.status="instalado"});
+   return;
+  }
+ }));
+ const projectPayForm=out.querySelector("#carPaymentForm");
+ if(projectPayForm){
+  const expense=projectPayForm.querySelector('[name="expenseId"]');
+  const source=projectPayForm.querySelector('[name="source"]');
+  const amount=projectPayForm.querySelector('[name="amount"]');
+  const sync=()=>{const e=finance.expenses.find(e=>e.id===expense?.value);
+    if(source?.value==="despesa"&&e){amount.value=fmtMoneyInput(e.amountC);amount.readOnly=true}
+    else amount.readOnly=false;
+  };
+  source?.addEventListener("change",sync);expense?.addEventListener("change",sync);sync();
+ }
+};
+
 start();
 })();
