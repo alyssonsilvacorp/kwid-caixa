@@ -697,6 +697,27 @@ function weeklyGoalCard(anchor=today()){
 let editCarItemId="",editCarPaymentId="",newPaymentItemId="";
 const projectCategories=[["mecanica","Mecânica"],["pneus","Pneus"],["iluminacao","Iluminação"],["exterior","Exterior"],["interior","Interior"],["servicos","Serviços e instalação"]];
 const projectStates=[["planejado","Planejado"],["reservando","Reservando"],["comprado","Comprado"],["instalado","Instalado"],["cancelado","Cancelado"]];
+const projectCombos=[
+ {id:"seguranca",title:"1 · Pneus e mecânica",priority:1,desc:"Prioridade máxima: pneus; duto somente após diagnóstico e compatibilidade."},
+ {id:"praticidade",title:"2 · Tecnologia e praticidade",priority:2,desc:"Multimídia, tapetes e carregador úteis no dia a dia."},
+ {id:"exterior",title:"3 · Visual externo",priority:3,desc:"Calotas, antena e película — sem trocar rodas ou instalar frisos."},
+ {id:"interior",title:"4 · Interior e conforto",priority:4,desc:"Capas, volante e iluminação ambiente discreta."},
+ {id:"iluminacao",title:"5 · Iluminação sob avaliação",priority:5,desc:"Kits externos condicionados à compatibilidade e às exigências legais."}
+];
+function projectComboSummaries(d=finance){
+ const project=d?.carProject||defaults().carProject;
+ const payments=(project.payments||[]).map(p=>resolvedProjectPayment(p,d));
+ return projectCombos.map(combo=>{
+  const items=(project.items||[]).filter(i=>i.bundle===combo.id&&i.active!==false&&i.status!=="cancelado");
+  const total=items.reduce((n,i)=>n+(Number(i.targetC)||0),0);
+  const paid=payments.filter(p=>!p.invalid&&items.some(i=>i.id===p.itemId)).reduce((n,p)=>n+p.amountC,0);
+  const pending=items.filter(i=>i.targetC==null).length;
+  const provisional=items.some(i=>i.priceProvisional===true);
+  return {...combo,items,total,paid,remaining:Math.max(0,total-paid),pending,provisional,
+   percent:total>0?Math.min(100,Math.round(paid*100/total)):0};
+ });
+}
+
 const projectSources=[["fundo","Fundo do carro"],["externo","Dinheiro de fora do fundo"],["despesa","Despesa operacional já lançada"]];
 const projectTypes=[["compra","Compra"],["servico","Serviço ou instalação"]];
 const projectItem=(id)=>finance?.carProject?.items?.find(x=>x.id===id);
@@ -740,8 +761,14 @@ function carProjectPage(){
  const item=projectItem(editCarItemId),payment=(d.payments||[]).find(x=>x.id===editCarPaymentId);
  const selectedItem=payment?.itemId||newPaymentItemId||ordered.find(x=>x.active!==false)?.id||"";
  const vehicle=d.vehicle||defaults().carProject.vehicle;
- const pack=ordered.filter(x=>x.bundle==="primeiro"&&x.active!==false);
- const packTotal=pack.reduce((n,x)=>n+(Number(x.targetC)||0),0);
+ const combos=projectComboSummaries();
+ const comboCards=combos.map(group=>'<section class="car-combo" data-combo="'+esc(group.id)+'">'+
+  '<div class="car-combo-top"><div><span class="car-combo-priority">PRIORIDADE '+group.priority+'</span><h3>'+esc(group.title)+'</h3></div><b>'+BRL(group.total)+'</b></div>'+
+  '<p>'+esc(group.desc)+'</p><div class="car-combo-tags">'+group.items.map(x=>'<span>'+esc(x.name)+'</span>').join("")+'</div>'+
+  '<div class="car-combo-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+group.percent+'"><div style="width:'+group.percent+'%"></div></div>'+
+  '<div class="car-combo-footer"><span>Compras pagas: '+BRL(group.paid)+'</span><strong>Falta comprar: '+BRL(group.remaining)+'</strong></div>'+
+  (group.provisional?'<small class="car-provisional">Inclui orçamento provisório, sujeito à cotação.</small>':"")+
+  '</section>').join("");
  const paySelect=ordered.filter(x=>x.status!=="cancelado").map(x=>[x.id,(x.code?x.code+" · ":"")+x.name]);
  const categoryTotals=projectCategories.map(([category,label])=>({category,label,paid:s.payments.filter(x=>!x.invalid&&projectItem(x.itemId)?.category===category).reduce((n,x)=>n+x.amountC,0)}));
  const paidItems=s.payments.slice().reverse();
@@ -759,10 +786,14 @@ function carProjectPage(){
   const percent=known&&x.targetC>0?Math.min(100,Math.round(spent*100/x.targetC)):0;
   const inactive=x.active===false;
   return '<article class="car-item '+(inactive?'car-inactive':'')+'"><div class="car-item-top"><div class="car-item-title"><span class="car-code">'+esc(x.code||"")+'</span><b>'+esc(x.name)+'</b></div>'+projectBadge(x)+'</div>'+
-   '<div class="car-labels"><span>'+esc(projectCategories.find(c=>c[0]===x.category)?.[1]||x.category||"Outros")+'</span><span>Prioridade '+esc(x.priority||3)+'</span><span>'+esc(x.quantity||1)+' un.</span>'+(inactive?'<span>Opcional / inativo</span>':"")+(x.bundle==="primeiro"?'<span>Primeiro pacote</span>':"")+'</div>'+
-   '<div class="car-prices"><div><small>Preço de referência</small><b>'+(known?BRL(x.targetC):"A cotar")+'</b></div><div><small>Pago</small><b>'+BRL(spent)+'</b></div><div><small>Ainda falta</small><b>'+(known?BRL(missing):"Preço pendente")+'</b></div></div>'+
+   '<div class="car-labels"><span>'+esc(projectCategories.find(c=>c[0]===x.category)?.[1]||x.category||"Outros")+'</span><span>Prioridade '+esc(x.priority||3)+'</span><span>'+esc(x.quantity||1)+' un.</span>'+(inactive?'<span>Opcional / inativo</span>':"")+(x.bundle?'<span>'+esc(projectCombos.find(g=>g.id===x.bundle)?.title||x.bundle)+'</span>':"")+'</div>'+
+   '<div class="car-prices"><div><small>Preço de referência</small><b>'+(known?BRL(x.targetC):"A cotar")+(x.priceProvisional?' <small class="car-provisional">provisório</small>':"")+'</b></div><div><small>Pago</small><b>'+BRL(spent)+'</b></div><div><small>Ainda falta</small><b>'+(known?BRL(missing):"Preço pendente")+'</b></div></div>'+
    '<div class="car-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+percent+'"><div style="width:'+percent+'%"></div></div>'+
    (x.notes?'<p class="car-note">'+esc(x.notes)+'</p>':"")+
+ (x.requiresVerification&&!x.verificationConfirmed?'<p class="car-warning">Compra condicionada à confirmação da necessidade e compatibilidade.</p>':"")+
+ (Array.isArray(x.priceHistory)&&x.priceHistory.length?'<details class="car-price-history"><summary>Histórico de preços ('+x.priceHistory.length+')</summary>'+
+ x.priceHistory.slice().reverse().map(h=>'<p>'+esc(when(h.date))+' · '+(h.oldC==null?'Sem preço':BRL(h.oldC))+' → '+(h.newC==null?'Pendente':BRL(h.newC))+
+ ' · '+esc(h.reason||"Revisão")+'</p>').join("")+'</details>':"")+
    '<div class="car-actions"><button type="button" data-project-action="edititem" data-project-id="'+esc(x.id)+'">Editar</button>'+
    '<button type="button" data-project-action="addpay" data-project-id="'+esc(x.id)+'">Registrar pagamento</button>'+
    (x.status==="comprado"?'<button type="button" data-project-action="install" data-project-id="'+esc(x.id)+'">Instalado</button>':"")+
@@ -779,10 +810,12 @@ function carProjectPage(){
  '<div><small>Pago em compras/serviços</small><b>'+BRL(s.actualPaid)+'</b></div>'+
  '<div><small>Falta pagar nos itens cotados</small><b>'+BRL(s.remainingByItem)+'</b></div>'+
  '<div><small>Ainda falta financiar</small><b>'+BRL(s.toFinance)+'</b></div></div>'+
- '<div class="car-alert">Preços de anúncios são referências. Existem '+s.pendingCount+' metas ativas sem preço definido; o orçamento final será maior. O fundo não é comprometido por itens apenas planejados.</div>'+
+ '<div class="car-alert">Preços de anúncios são referências, e o valor dos pneus é provisório. Nenhum serviço ou mão de obra faz parte do orçamento. '+(s.pendingCount?'Existem '+s.pendingCount+' itens sem preço. ':"")+'O fundo não é comprometido por itens apenas planejados.</div>'+
  '<details class="car-categories"><summary>Gastos reais por categoria</summary><div class="car-category-rows">'+categoryTotals.map(x=>line(x.label,BRL(x.paid))).join("")+'</div><small>Inclui pagamentos registrados no projeto e despesas operacionais vinculadas, sem somá-las duas vezes ao resultado.</small></details>'+
- '<section class="car-bundle"><div class="row"><b>Primeiro Pacote — Kwid</b><strong>'+BRL(packTotal)+'</strong></div><small>'+pack.map(x=>esc(x.name)).join(" · ")+'</small><p>Itens independentes. Duto condicionado à avaliação mecânica; pneus e segurança têm preferência sobre estética.</p></section>'+
- '<div class="car-section-head"><h2>Metas e serviços</h2><span>'+ordered.length+' registros</span></div>'+
+ '<div class="car-section-head"><h2>Combos por prioridade</h2><span>'+combos.length+' combos</span></div>'+
+ '<p class="car-combo-disclaimer">Combos organizam as compras, mas não criam metas duplicadas nem reservam valores adicionais. As barras mostram o que já foi efetivamente pago.</p>'+
+ '<div class="car-combo-list">'+comboCards+'</div>'+
+ '<div class="car-section-head"><h2>Produtos individuais</h2><span>'+ordered.length+' registros</span></div>'+
  '<div class="car-items">'+(list||'<p>Nenhuma meta cadastrada.</p>')+'</div>'+
  '<details class="car-form-section" '+(item?'open':"")+' id="carItemSection"><summary>'+(item?'Editar item: '+esc(item.name):'+ Adicionar meta ou serviço')+'</summary>'+
  '<form id="carItemForm">'+
@@ -793,7 +826,10 @@ function carProjectPage(){
  inpt("target","Preço TOTAL de referência (R$; deixe vazio se pendente)","number",item?.targetC!=null?fmtMoneyInput(item.targetC):"","min=0 step=0.01 inputmode=decimal")+
  '<div class="grid"><label>Prioridade (1 = mais urgente)<select name="priority">'+projectFormOptions([[1,"1 — Urgente"],[2,"2 — Alta"],[3,"3 — Média"],[4,"4 — Baixa"],[5,"5 — Opcional"]],item?.priority??3)+'</select></label>'+
  '<label>Status<select name="status">'+projectFormOptions(projectStates,item?.status||"planejado")+'</select></label></div>'+
- '<label>Grupo<select name="bundle">'+projectFormOptions([["","Sem grupo"],["primeiro","Primeiro Pacote — Kwid"]],item?.bundle||"")+'</select></label>'+
+ '<label>Combo<select name="bundle">'+projectFormOptions([["","Sem combo"],...projectCombos.map(g=>[g.id,g.title])],item?.bundle||"")+'</select></label>'+
+ '<label class="car-checkbox"><input type="checkbox" name="priceProvisional" '+(item?.priceProvisional?"checked":"")+'> Preço apenas provisório (não cotação confirmada)</label>'+
+ '<label class="car-checkbox"><input type="checkbox" name="requiresVerification" '+(item?.requiresVerification?"checked":"")+'> Compra depende de verificação mecânica, compatibilidade ou legalidade</label>'+
+ '<label class="car-checkbox"><input type="checkbox" name="verificationConfirmed" '+(item?.verificationConfirmed?"checked":"")+'> Necessidade e compatibilidade verificadas antes da compra</label>'+
  '<label class="car-checkbox"><input type="checkbox" name="active" '+(item?.active===false?"":"checked")+'> Incluído no orçamento ativo</label>'+
  '<label>Observações<textarea name="notes" rows="3" maxlength="1000">'+esc(item?.notes||"")+'</textarea></label>'+
  '<button class="btn block" type="submit">'+(item?"Salvar alterações":"Adicionar meta planejada")+'</button>'+
