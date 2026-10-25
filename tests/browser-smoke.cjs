@@ -90,6 +90,83 @@ async function run(){
   assert.match(await page.locator(".goal-panel").innerText(),/Meta alcançada/i);
   assert.match(await page.locator(".goal-panel").innerText(),/finalize a corrida/i);
   assert.equal((await page.evaluate(()=>JSON.parse(localStorage.getItem("mock_ledger")).data)).shifts[1].grossC,15500);
+
+  // Real mobile UX: planned goals do not spend, paid purchase debits fund once.
+  await page.locator(".footnav [data-go=metas]").click();
+  await page.locator(".car-balance-value").waitFor();
+  assert.match(await page.locator(".app-main h1").innerText(),/Projeto do Carro/);
+  const projectBalance=()=>page.locator(".car-balance-value").innerText().then(x=>Math.round(Number(x.replace(/[^0-9,]/g,"").replace(",","."))*100));
+  const balanceBefore=await projectBalance();
+  assert.ok(balanceBefore>=2500,"Fund insufficient for test: "+balanceBefore);
+  await page.locator("#carItemSection summary").click();
+  await page.locator('#carItemForm input[name="name"]').fill("Peça teste");
+  await page.locator('#carItemForm input[name="code"]').fill("TEST");
+  await page.locator('#carItemForm input[name="target"]').fill("50.00");
+  await page.locator('#carItemForm button[type="submit"]').click();
+  await page.waitForFunction(()=>document.querySelector(".car-item")?.textContent.includes("Peça teste"));
+  assert.equal(await projectBalance(),balanceBefore);
+  let db=await page.evaluate(()=>JSON.parse(localStorage.getItem("mock_ledger")).data);
+  assert.equal(db.carProject.items.length,1);
+  assert.equal(db.carProject.payments.length,0);
+  assert.equal(db.expenses.length,1);
+  await page.locator('.car-item [data-project-action="addpay"]').click();
+  await page.locator('#carPaymentForm input[name="amount"]').fill("20.00");
+  page.once("dialog",dialog=>dialog.accept());
+  await page.locator('#carPaymentForm button[type="submit"]').click();
+  await page.waitForFunction(()=>document.querySelector(".car-payment-history"));
+  assert.equal(await projectBalance(),balanceBefore-2000);
+  db=await page.evaluate(()=>JSON.parse(localStorage.getItem("mock_ledger")).data);
+  assert.equal(db.carProject.payments.length,1);
+  assert.equal(db.carProject.payments[0].amountC,2000);
+  assert.equal(db.carProject.items[0].status,"reservando");
+  assert.equal(db.expenses.length,1); // no duplicate operating expense
+  // Edit paid amount and then reverse ONLY its bookkeeping entry.
+  await page.locator('[data-project-action="editpay"]').click();
+  await page.locator('#carPaymentForm input[name="amount"]').fill("25.00");
+  page.once("dialog",dialog=>dialog.accept());
+  await page.locator('#carPaymentForm button[type="submit"]').click();
+  await page.waitForFunction(()=>document.querySelector(".car-payment-history .row b:last-child")?.textContent?.includes("25,00"));
+  assert.equal(await projectBalance(),balanceBefore-2500);
+  page.once("dialog",dialog=>dialog.accept());
+  await page.locator('[data-project-action="delpay"]').click();
+  await page.waitForFunction(()=>!document.querySelector(".car-payment-history"));
+  assert.equal(await projectBalance(),balanceBefore);
+  // An operating expense already posted can be linked without a second debit.
+  await page.locator(".footnav [data-go=gastos]").click();
+  await page.locator('#expenseForm select[name="category"]').selectOption("Manutenção");
+  await page.locator('#expenseForm input[name="amount"]').fill("4.30");
+  await page.locator('#expenseForm button[type="submit"]').click();
+  await page.waitForFunction(()=>JSON.parse(localStorage.getItem("mock_ledger")).data.expenses.length===2);
+  await page.locator(".footnav [data-go=metas]").click();
+  const afterExpenseBalance=await projectBalance();
+  await page.locator('.car-item [data-project-action="addpay"]').click();
+  await page.locator('#carPaymentForm select[name="source"]').selectOption("despesa");
+  const opExpense=await page.evaluate(()=>JSON.parse(localStorage.getItem("mock_ledger")).data.expenses.at(-1).id);
+  await page.locator('#carPaymentForm select[name="expenseId"]').selectOption(opExpense);
+  assert.equal(await page.locator('#carPaymentForm input[name="amount"]').inputValue(),"4.30");
+  page.once("dialog",dialog=>dialog.accept());
+  await page.locator('#carPaymentForm button[type="submit"]').click();
+  await page.waitForFunction(()=>document.querySelector(".car-payment-history"));
+  assert.equal(await projectBalance(),afterExpenseBalance);
+  db=await page.evaluate(()=>JSON.parse(localStorage.getItem("mock_ledger")).data);
+  assert.equal(db.carProject.payments.length,1);
+  assert.equal(db.carProject.payments[0].source,"despesa");
+  assert.equal(db.expenses.length,2);
+  // A goal with real payments cannot be destroyed before unlinking.
+  await page.locator('.car-item [data-project-action="delitem"]').click();
+  db=await page.evaluate(()=>JSON.parse(localStorage.getItem("mock_ledger")).data);
+  assert.equal(db.carProject.items.length,1);
+  page.once("dialog",dialog=>dialog.accept());
+  await page.locator('[data-project-action="delpay"]').click();
+  await page.waitForFunction(()=>!document.querySelector(".car-payment-history"));
+  page.once("dialog",dialog=>dialog.accept());
+  await page.locator('.car-item [data-project-action="delitem"]').click();
+  await page.waitForFunction(()=>!document.querySelector(".car-item"));
+  db=await page.evaluate(()=>JSON.parse(localStorage.getItem("mock_ledger")).data);
+  assert.equal(db.carProject.items.length,0);
+  assert.equal(db.carProject.payments.length,0);
+  assert.equal(db.expenses.length,2);
+
   assert.equal(errors.length,0,errors.join(" | "));
   console.log("PASS: mobile login, start, reload, ride, finish, financial dashboard");
  }finally{await browser.close()}
