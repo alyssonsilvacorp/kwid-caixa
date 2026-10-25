@@ -189,3 +189,62 @@ body:has(.auth-premium){background:radial-gradient(ellipse 67% 55% at 50% 12%,#1
 .goal-panel .goal-head{font-size:10px}
 .goal-panel .goal-caveat{font-size:10px}
 @media(max-width:380px){.weekly-number{font-size:26px}.weekly-number span{font-size:12px}}
+
+
+/* Kwid project — compact, tactile mobile-first cards. */
+.car-balance{border:1px solid #3c8e67;background:linear-gradient(142deg,#193b2f,#15202a 84%);padding:19px 16px;border-radius:23px;margin:15px 0 12px;box-shadow:inset 0 1px #b7f8ce24,0 15px 30px #0003}
+.car-balance .eyebrow{font-size:11px;letter-spacing:1.1px;color:#9fe8bd;font-weight:800}
+.car-balance-value{font-size:35px;font-weight:850;letter-spacing:-1.25px;color:#d6ffe5;margin:8px 0 13px}
+.car-balance-lines{border-top:1px solid #9fe8bd2e;padding-top:9px}
+.car-balance-lines .row{font-size:12px;color:#dbf0e1;gap:8px;margin:5px 0}
+.car-balance-lines .row span{flex:1}
+.car-balance>p{font-size:11px;line-height:1.6;color:#9fc0ac;margin:13px 0 0}
+.car-summary-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:12px 0}
+.car-summary-grid>div{background:#19262a;border:1px solid #334644;border-radius:15px;padding:12px 11px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.car-summary-grid small{font-size:10px;color:#a4beb4;line-height:1.4}
+.car-summary-grid b{font-size:19px;letter-spacing:-.6px;color:#f2fff6}
+.car-alert{margin:11px 0;background:#28291e;border:1px solid #665d37;color:#e9deab;padding:12px;border-radius:12px;font-size:11px;line-height:1.6}
+.car-bundle{border:1px solid #476551;background:#1b2c28;border-radius:16px;padding:15px 13px;margin:13px 0 20px}
+.car-bundle .row{align-items:baseline;gap:10px}
+.car-bundle b{font-size:14px;color:#e5fbe8}
+.car-bundle strong{font-size:16px;color:#a5f0bb}
+.car-bundle small{display:block;font-size:11px;color:#a3dfba;margin-top:9px;line-height:1.5}
+.car-bundle p{font-size:11px;color:#afc6b5;margin:10px 0 0;line-height:1.5}
+.car-section-head{display:flex;justify-content:space-between;align-items:baseline;margin:20px 0 10px;gap:8px}
+.car-section-head h2{margin:0;font-size:18px}
+.car-section-head span{font-size:11px;color:#a3b7af}
+.car-items,.car-payments{display:flex;flex-direction:column;gap:11px}
+.car-item{border:1px solid #364b47;border-radius:17px;padding:15px 13px;background:linear-gradient(128deg,#19282b,#172124)}
+.car-inactive{opacity:.65}
+.car-item-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.car-item-title{display:flex;flex-direction:column;gap:5px;min-width:0}
+.car-item-title b{font-size:14px;color:#effaf3;line-height:1.35}
+.car-code{font-size:10px;font-weight:750;letter-spacing:1.1px;color:#81b69e}
+.car-tag{flex-shrink:0;font-size:10px;white-space:nowrap;border-radius:7px;padding:5px 7px;color:#d1dfd5;background:#303e39}
+.car-status-comprado,.car-status-instalado{background:#245c46;color:#abf7ca}
+.car-status-reservando{background:#294b56;color:#a8edff}
+.car-status-cancelado{background:#4c3639;color:#fdc8cb}
+.car-labels{display:flex;flex-wrap:wrap;gap:5px;margin:11px 0}
+.car-labels>span{font-size:10px;padding:5px 7px;border-radius:7px;background:#263a37;color:#aed3c3}
+.car-prices{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin:11px 0}
+.car-prices>div{min-width:0}
+.car-prices small{font-size:9px;display:block;color:#9ab5a9;line-height:1.35;margin-bottom:4px}
+.car-prices b{font-size:12px;color:#e6fbed;word-break:break-word}
+.car-progress{height:6px;background:#32423c;border-radius:99px;overflow:hidden}
+.car-progress>div{background:linear-gradient(90deg,#57c894,#a9f4c5);height:100%;border-radius:99px}
+.car-note{font-size:11px;color:#a1bdb1;line-height:1.5;margin:10px 0}
+.car-actions{display:flex;flex-wrap:wrap;gap:7px;margin:12px 0 0}
+.car-actions button{border:1px solid #496960;background:#263936;color:#d4efe1;border-radius:9px;padding:8px 10px;font-size:11px;cursor:pointer}
+.car-actions button:focus-visible{outline:2px solid #95e8b0;outline-offset:2px}
+.car-form-section{background:#1b292b;border:1px solid #36534a;border-radius:15px;padding:15px 13px;margin:16px 0}
+.car-form-section summary{cursor:pointer;user-select:none;font-size:14px;color:#c4efda;font-weight:780}
+.car-form-section form{padding-top:13px}
+.car-form-section .grid{grid-template-columns:1fr 1fr}
+.car-form-section input,.car-form-section textarea,.car-form-section select{width:100%;min-width:0}
+.car-form-section .car-checkbox{display:flex;align-items:center;gap:10px;margin:11px 0}
+.car-form-section .car-checkbox input{width:16px;height:16px}
+.car-payment-history{padding:14px 12px;background:#17272a;border:1px solid #365149;border-radius:12px}
+.car-payment-history .row{gap:10px}
+.car-payment-history .row b{font-size:13px}
+.car-payment-history p{color:#adcbba;font-size:11px;line-height:1.5;margin:6px 0}
+@media(max-width:370px){.car-balance-value{font-size:30px}.car-prices b{font-size:11px}.car-summary-grid b{font-size:17px}}
