@@ -248,3 +248,10 @@ body:has(.auth-premium){background:radial-gradient(ellipse 67% 55% at 50% 12%,#1
 .car-payment-history .row b{font-size:13px}
 .car-payment-history p{color:#adcbba;font-size:11px;line-height:1.5;margin:6px 0}
 @media(max-width:370px){.car-balance-value{font-size:30px}.car-prices b{font-size:11px}.car-summary-grid b{font-size:17px}}
+
+
+.car-categories{margin:11px 0 16px;padding:13px;background:#1a2928;border:1px solid #395c4d;border-radius:13px}
+.car-categories summary{font-size:13px;color:#c4ecd0;font-weight:700;cursor:pointer}
+.car-category-rows{margin:12px 0 8px;display:flex;flex-direction:column;gap:8px}
+.car-category-rows .row{font-size:12px;color:#d1e8d5}
+.car-categories small{display:block;font-size:10px;line-height:1.55;color:#8ea99b}
