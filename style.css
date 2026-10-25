@@ -255,3 +255,29 @@ body:has(.auth-premium){background:radial-gradient(ellipse 67% 55% at 50% 12%,#1
 .car-category-rows{margin:12px 0 8px;display:flex;flex-direction:column;gap:8px}
 .car-category-rows .row{font-size:12px;color:#d1e8d5}
 .car-categories small{display:block;font-size:10px;line-height:1.55;color:#8ea99b}
+
+
+/* Prioritized purchase combos — visual grouping only, no second financial ledger. */
+.car-combo-disclaimer{font-size:11px;line-height:1.55;color:#9db7aa;margin:0 0 12px}
+.car-combo-list{display:flex;flex-direction:column;gap:12px;margin-bottom:18px}
+.car-combo{border:1px solid #38544b;background:linear-gradient(145deg,#1b2f2b,#172327);border-radius:18px;padding:15px 13px}
+.car-combo:first-child{border-color:#549d71;background:linear-gradient(145deg,#214036,#162928)}
+.car-combo-top{display:flex;align-items:flex-start;justify-content:space-between;gap:11px}
+.car-combo-top h3{font-size:15px;line-height:1.4;color:#effbf1;margin:4px 0 0}
+.car-combo-top b{font-size:17px;color:#a9f6c6;white-space:nowrap}
+.car-combo-priority{font-size:10px;font-weight:810;letter-spacing:1.1px;color:#89dbb1}
+.car-combo p{font-size:11px;line-height:1.5;color:#a4c1b4;margin:10px 0}
+.car-combo-tags{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0}
+.car-combo-tags span{font-size:10px;line-height:1.5;color:#c6dfd0;background:#2a4039;border-radius:6px;padding:5px 7px}
+.car-combo-progress{background:#32483d;height:8px;border-radius:100px;overflow:hidden;margin:12px 0 9px}
+.car-combo-progress>div{height:100%;background:linear-gradient(90deg,#55cd9b,#a8f8cb);border-radius:100px}
+.car-combo-footer{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:5px}
+.car-combo-footer span{font-size:11px;color:#94b7a3}
+.car-combo-footer strong{font-size:11px;color:#daffea}
+.car-provisional{color:#e7ce82!important;font-weight:710;font-size:10px;line-height:1.55}
+.car-item .car-prices b .car-provisional{display:block;margin-top:3px}
+.car-warning{border-left:3px solid #e6b960;padding:8px 10px;background:#493f281f;border-radius:0 8px 8px 0;font-size:11px;color:#f3d3a1;line-height:1.5}
+.car-price-history{margin:10px 0;background:#1b2b29;border-radius:8px;border:1px solid #3e5648;padding:10px}
+.car-price-history summary{cursor:pointer;font-size:11px;font-weight:750;color:#a3ddbf}
+.car-price-history p{font-size:11px;color:#bccfc2;margin:8px 0 0;line-height:1.5}
+@media(max-width:370px){.car-combo-top b{font-size:15px}.car-combo-top h3{font-size:14px}}
