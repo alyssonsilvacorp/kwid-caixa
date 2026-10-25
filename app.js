@@ -691,5 +691,128 @@ function weeklyGoalCard(anchor=today()){
  ' Valores brutos da operação, antes dos custos; turnos que atravessam a meia-noite contam pela data de início.</p></section>';
 }
 
+
+/* Project of the car — one source of reserve: existing compute().car + compute().wear.
+   Purchases paid from this fund are debited here, NOT duplicated in operating expenses. */
+let editCarItemId="",editCarPaymentId="",newPaymentItemId="";
+const projectCategories=[["mecanica","Mecânica"],["pneus","Pneus"],["iluminacao","Iluminação"],["exterior","Exterior"],["interior","Interior"],["servicos","Serviços e instalação"]];
+const projectStates=[["planejado","Planejado"],["reservando","Reservando"],["comprado","Comprado"],["instalado","Instalado"],["cancelado","Cancelado"]];
+const projectSources=[["fundo","Fundo do carro"],["externo","Dinheiro de fora do fundo"],["despesa","Despesa operacional já lançada"]];
+const projectTypes=[["compra","Compra"],["servico","Serviço ou instalação"]];
+const projectItem=(id)=>finance?.carProject?.items?.find(x=>x.id===id);
+const resolvedProjectPayment=(p,d=finance)=>{
+ if(p.source!=="despesa")return {...p,amountC:Number(p.amountC)||0,invalid:false};
+ const linked=(d.expenses||[]).find(ex=>ex.id===p.expenseId);
+ return {...p,amountC:linked?(Number(linked.amountC)||0):0,invalid:!linked};
+};
+function projectSummary(){
+ const a=compute(),d=finance||defaults(),p=d.carProject||defaults().carProject;
+ const payments=(p.payments||[]).map(x=>resolvedProjectPayment(x,d));
+ const legacySpent=(d.goals||[]).reduce((n,g)=>n+(Number(g.purchase?.appliedC)||0),0);
+ const generated=Math.max(0,(Number(a.car)||0)+(Number(a.wear)||0));
+ const fundPaid=payments.filter(x=>x.source==="fundo").reduce((n,x)=>n+x.amountC,0);
+ const available=Math.max(0,generated-fundPaid-legacySpent);
+ const deficit=Math.max(0,fundPaid+legacySpent-generated);
+ const items=(p.items||[]).filter(x=>x.active!==false&&x.status!=="cancelado");
+ const plannedC=items.reduce((n,x)=>n+(x.targetC===null||x.targetC===undefined?0:Number(x.targetC)||0),0);
+ const pendingCount=items.filter(x=>x.targetC===null||x.targetC===undefined).length;
+ const actualPaid=payments.filter(x=>!x.invalid).reduce((n,x)=>n+x.amountC,0);
+ const paidProjectItems=payments.filter(x=>!x.invalid&&items.some(i=>i.id===x.itemId));
+ const remainingByItem=items.reduce((n,item)=>{
+  if(item.targetC===null||item.targetC===undefined)return n;
+  const paid=paidProjectItems.filter(x=>x.itemId===item.id).reduce((sum,x)=>sum+x.amountC,0);
+  return n+Math.max(0,(Number(item.targetC)||0)-paid);
+ },0);
+ return {generated,fundPaid,legacySpent,available,deficit,plannedC,pendingCount,actualPaid,
+  remainingByItem,toFinance:Math.max(0,remainingByItem-available),payments,items};
+}
+function projectItemPaid(itemId,s){
+ return s.payments.filter(p=>p.itemId===itemId&&!p.invalid).reduce((n,p)=>n+p.amountC,0);
+}
+function projectBadge(item){
+ const known=projectStates.find(x=>x[0]===item.status)?.[1]||"Planejado";
+ return '<span class="car-tag car-status-'+esc(item.status||"planejado")+'">'+esc(known)+'</span>';
+}
+function projectFormOptions(values,current){return values.map(x=>'<option value="'+esc(x[0])+'" '+(x[0]===current?"selected":"")+'>'+esc(x[1])+'</option>').join("")}
+function carProjectPage(){
+ const d=finance.carProject||defaults().carProject,s=projectSummary();
+ const ordered=(d.items||[]).slice().sort((a,b)=>Number(a.priority||3)-Number(b.priority||3)||String(a.code||"").localeCompare(String(b.code||""),"pt-BR"));
+ const item=projectItem(editCarItemId),payment=(d.payments||[]).find(x=>x.id===editCarPaymentId);
+ const selectedItem=payment?.itemId||newPaymentItemId||ordered.find(x=>x.active!==false)?.id||"";
+ const vehicle=d.vehicle||defaults().carProject.vehicle;
+ const pack=ordered.filter(x=>x.bundle==="primeiro"&&x.active!==false);
+ const packTotal=pack.reduce((n,x)=>n+(Number(x.targetC)||0),0);
+ const paySelect=ordered.filter(x=>x.status!=="cancelado").map(x=>[x.id,(x.code?x.code+" · ":"")+x.name]);
+ const paidItems=s.payments.slice().reverse();
+ const recent=paidItems.length?paidItems.map(p=>{
+  const g=projectItem(p.itemId),whenPaid=p.date?when(p.date):"Sem data";
+  const category=projectCategories.find(c=>c[0]===g?.category)?.[1]||"Outros";
+  return '<div class="car-payment-history"><div class="row"><b>'+esc(g?.name||"Item removido")+'</b><b>'+BRL(p.amountC)+'</b></div>'+
+   '<p>'+whenPaid+' · '+esc(category)+' · '+esc(projectTypes.find(x=>x[0]===p.type)?.[1]||"Pagamento")+' · '+esc(projectSources.find(x=>x[0]===p.source)?.[1]||"Outro")+(p.invalid?' · VÍNCULO DA DESPESA EXCLUÍDO':'')+'</p>'+
+   (p.note?'<p>'+esc(p.note)+'</p>':"")+
+   '<div class="car-actions"><button type="button" data-project-action="editpay" data-project-id="'+esc(p.id)+'">Editar</button><button type="button" data-project-action="delpay" data-project-id="'+esc(p.id)+'">Excluir lançamento</button></div></div>';
+ }).join(""):'<p class="muted">Nenhuma compra ou serviço pago foi lançado. Produtos planejados não debitam o fundo.</p>';
+ const list=ordered.map(x=>{
+  const spent=projectItemPaid(x.id,s),known=x.targetC!==null&&x.targetC!==undefined;
+  const missing=known?Math.max(0,(Number(x.targetC)||0)-spent):null;
+  const percent=known&&x.targetC>0?Math.min(100,Math.round(spent*100/x.targetC)):0;
+  const inactive=x.active===false;
+  return '<article class="car-item '+(inactive?'car-inactive':'')+'"><div class="car-item-top"><div class="car-item-title"><span class="car-code">'+esc(x.code||"")+'</span><b>'+esc(x.name)+'</b></div>'+projectBadge(x)+'</div>'+
+   '<div class="car-labels"><span>'+esc(projectCategories.find(c=>c[0]===x.category)?.[1]||x.category||"Outros")+'</span><span>Prioridade '+esc(x.priority||3)+'</span><span>'+esc(x.quantity||1)+' un.</span>'+(inactive?'<span>Opcional / inativo</span>':"")+(x.bundle==="primeiro"?'<span>Primeiro pacote</span>':"")+'</div>'+
+   '<div class="car-prices"><div><small>Preço de referência</small><b>'+(known?BRL(x.targetC):"A cotar")+'</b></div><div><small>Pago</small><b>'+BRL(spent)+'</b></div><div><small>Ainda falta</small><b>'+(known?BRL(missing):"Preço pendente")+'</b></div></div>'+
+   '<div class="car-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+percent+'"><div style="width:'+percent+'%"></div></div>'+
+   (x.notes?'<p class="car-note">'+esc(x.notes)+'</p>':"")+
+   '<div class="car-actions"><button type="button" data-project-action="edititem" data-project-id="'+esc(x.id)+'">Editar</button>'+
+   '<button type="button" data-project-action="addpay" data-project-id="'+esc(x.id)+'">Registrar pagamento</button>'+
+   (x.status==="comprado"?'<button type="button" data-project-action="install" data-project-id="'+esc(x.id)+'">Instalado</button>':"")+
+   '<button type="button" data-project-action="delitem" data-project-id="'+esc(x.id)+'">Excluir</button></div></article>';
+ }).join("");
+ return '<div class="section-overline">FINANÇAS DO VEÍCULO</div><h1>Projeto do Carro</h1>'+
+ '<p class="desc">'+esc(vehicle.model||"Renault Kwid")+' · '+esc(String(vehicle.manufactureYear||2021))+'/'+esc(String(vehicle.modelYear||2022))+' · '+esc(vehicle.color||"Branco")+' · '+esc(vehicle.wheels||"Aro 14")+'</p>'+
+ '<section class="car-balance"><span class="eyebrow">SALDO DISPONÍVEL DO FUNDO</span><div class="car-balance-value">'+BRL(s.available)+'</div>'+
+ '<div class="car-balance-lines">'+line("Provisão acumulada calculada",BRL(s.generated))+line("Compras pagas pelo fundo","− "+BRL(s.fundPaid))+
+ (s.legacySpent?line("Baixas antigas de metas","− "+BRL(s.legacySpent)):"")+
+ (s.deficit?line("Diferença a regularizar",BRL(s.deficit)):"")+'</div>'+
+ '<p>Saldo calculado com a reserva que o RodaCaixa já gera nos turnos, incluindo desgaste. Não representa saldo bancário confirmado. Nenhuma reserva adicional foi criada.</p></section>'+
+ '<div class="car-summary-grid"><div><small>Itens com preço conhecido</small><b>'+BRL(s.plannedC)+'</b></div>'+
+ '<div><small>Pago em compras/serviços</small><b>'+BRL(s.actualPaid)+'</b></div>'+
+ '<div><small>Falta pagar nos itens cotados</small><b>'+BRL(s.remainingByItem)+'</b></div>'+
+ '<div><small>Ainda falta financiar</small><b>'+BRL(s.toFinance)+'</b></div></div>'+
+ '<div class="car-alert">Preços de anúncios são referências. Existem '+s.pendingCount+' metas ativas sem preço definido; o orçamento final será maior. O fundo não é comprometido por itens apenas planejados.</div>'+
+ '<section class="car-bundle"><div class="row"><b>Primeiro Pacote — Kwid</b><strong>'+BRL(packTotal)+'</strong></div><small>'+pack.map(x=>esc(x.name)).join(" · ")+'</small><p>Itens independentes. Duto condicionado à avaliação mecânica; pneus e segurança têm preferência sobre estética.</p></section>'+
+ '<div class="car-section-head"><h2>Metas e serviços</h2><span>'+ordered.length+' registros</span></div>'+
+ '<div class="car-items">'+(list||'<p>Nenhuma meta cadastrada.</p>')+'</div>'+
+ '<details class="car-form-section" '+(item?'open':"")+' id="carItemSection"><summary>'+(item?'Editar item: '+esc(item.name):'+ Adicionar meta ou serviço')+'</summary>'+
+ '<form id="carItemForm">'+
+ inpt("name","Nome","text",item?.name||"","required maxlength=120")+
+ '<div class="grid">'+inpt("code","Código","text",item?.code||"","maxlength=25")+
+ inpt("quantity","Quantidade","number",item?.quantity??1,"required min=1 max=99 step=1")+'</div>'+
+ '<label>Categoria<select name="category">'+projectFormOptions(projectCategories,item?.category||"mecanica")+'</select></label>'+
+ inpt("target","Preço TOTAL de referência (R$; deixe vazio se pendente)","number",item?.targetC!=null?fmtMoneyInput(item.targetC):"","min=0 step=0.01 inputmode=decimal")+
+ '<div class="grid"><label>Prioridade (1 = mais urgente)<select name="priority">'+projectFormOptions([[1,"1 — Urgente"],[2,"2 — Alta"],[3,"3 — Média"],[4,"4 — Baixa"],[5,"5 — Opcional"]],item?.priority??3)+'</select></label>'+
+ '<label>Status<select name="status">'+projectFormOptions(projectStates,item?.status||"planejado")+'</select></label></div>'+
+ '<label>Grupo<select name="bundle">'+projectFormOptions([["","Sem grupo"],["primeiro","Primeiro Pacote — Kwid"]],item?.bundle||"")+'</select></label>'+
+ '<label class="car-checkbox"><input type="checkbox" name="active" '+(item?.active===false?"":"checked")+'> Incluído no orçamento ativo</label>'+
+ '<label>Observações<textarea name="notes" rows="3" maxlength="1000">'+esc(item?.notes||"")+'</textarea></label>'+
+ '<button class="btn block" type="submit">'+(item?"Salvar alterações":"Adicionar meta planejada")+'</button>'+
+ (item?'<button type="button" class="btn secondary block" data-project-action="clearitem">Cancelar edição</button>':"")+
+ '</form></details>'+
+ '<details class="car-form-section" '+(payment||newPaymentItemId?'open':"")+' id="carPaymentSection"><summary>'+(payment?"Editar pagamento":'+ Registrar compra, pagamento ou serviço')+'</summary>'+
+ '<form id="carPaymentForm"><label>Meta / serviço<select name="itemId">'+projectFormOptions(paySelect,selectedItem)+'</select></label>'+
+ '<div class="grid">'+inpt("date","Data real do pagamento","date",payment?.date||today(),"required")+
+ inpt("amount","Valor efetivamente pago (R$)","number",payment?fmtMoneyInput(payment.amountC):"","required min=0.01 step=0.01 inputmode=decimal")+'</div>'+
+ '<label>Tipo<select name="type">'+projectFormOptions(projectTypes,payment?.type||"compra")+'</select></label>'+
+ '<label>Origem do dinheiro<select name="source">'+projectFormOptions(projectSources,payment?.source||"fundo")+'</select></label>'+
+ '<label>Vincular despesa operacional (obrigatório só se escolher essa origem)<select name="expenseId"><option value="">Selecione a despesa registrada</option>'+
+ (finance.expenses||[]).map(e=>'<option value="'+esc(e.id)+'" '+(payment?.expenseId===e.id?"selected":"")+'>'+esc(when(e.date))+' · '+esc(e.category)+' · '+BRL(e.amountC)+'</option>').join("")+'</select></label>'+
+ '<p class="field-hint">Use Fundo do carro para compras pagas com a reserva calculada. Não lance novamente em Gastos. Se já lançou em Gastos, apenas vincule a despesa existente.</p>'+
+ '<label>Comprovante/observações<textarea name="note" rows="2" maxlength="800">'+esc(payment?.note||"")+'</textarea></label>'+
+ '<button class="btn block" type="submit">'+(payment?"Salvar alterações do pagamento":"Confirmar pagamento real")+'</button>'+
+ (payment?'<button type="button" class="btn secondary block" data-project-action="clearpay">Cancelar edição</button>':"")+
+ '</form></details>'+
+ '<div class="car-section-head"><h2>Histórico de pagamentos</h2><span>'+s.payments.length+' lançamento(s)</span></div><div class="car-payments">'+recent+'</div>'+
+ '<div class="help">Prioridade de segurança: inspeção da trepidação e estado dos pneus. LED externo, capas de banco e demais acessórios dependem de compatibilidade e, quando aplicável, regularidade legal. Instalação somente após avaliação.</div>';
+}
+
 start();
 })();
