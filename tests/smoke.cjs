@@ -4,7 +4,7 @@ const vm=require("node:vm");
 const assert=require("node:assert/strict");
 let code=readFileSync("app.js","utf8");
 assert.match(code,/start\(\);\s*\}\)\(\);\s*$/);
-code=code.replace(/start\(\);\s*\}\)\(\);\s*$/,'globalThis.__test={defaults,normalize,compute,activeTurn,shiftRides,kmRide,sumRide,guessAmounts,datetimeLocal,weekBounds,weeklyGoalState,weeklyGoalCard,setFinance:(v)=>finance=v};})();');
+code=code.replace(/start\(\);\s*\}\)\(\);\s*$/,'globalThis.__test={defaults,normalize,compute,activeTurn,shiftRides,kmRide,sumRide,guessAmounts,datetimeLocal,weekBounds,weeklyGoalState,weeklyGoalCard,projectSummary,projectItemPaid,setFinance:(v)=>finance=v};})();');
 const root={innerHTML:""},toast={classList:{add(){},remove(){}},style:{},textContent:""};
 const sandbox={document:{getElementById:id=>id==="app"?root:toast},window:{addEventListener(){}},Intl,Date,Number,String,Object,Array,Math,crypto:{randomUUID:()=>"unit-test-id"},console,setTimeout,clearTimeout};
 vm.runInNewContext(code,sandbox,{timeout:5000});
@@ -70,6 +70,66 @@ assert.equal(t.weeklyGoalState("2026-10-26").gross,0);
 scheduled.shifts.push({id:"new-shift",date:"2026-10-27",grossC:15000,km:0,rides:[],status:"closed"});
 assert.equal(t.weeklyGoalState("2026-10-27").gross,15000);
 assert.equal(t.weeklyGoalState("2026-11-02").gross,0);
+t.setFinance(d);
+
+// Car project reuses ONLY the financial engine's existing car+wear allocation.
+const projectLedger=t.defaults();
+projectLedger.goals=[];projectLedger.expenses=[];
+projectLedger.shifts=[{id:"p-shift",status:"closed",date:"2026-10-23",start:"21:00",end:"02:14",km:95.8,grossC:17594,kmPerL:13,fuelPriceC:665,wearPerKmC:15,otherC:0}];
+projectLedger.carProject.items=[
+ {id:"p1",name:"Duto",category:"mecanica",targetC:22728,quantity:1,status:"planejado",active:true,priority:1},
+ {id:"p2",name:"Pneus",category:"pneus",targetC:null,quantity:2,status:"planejado",active:true,priority:1},
+ {id:"inactive",name:"Adesivo",category:"exterior",targetC:5771,status:"planejado",active:false,priority:5}
+];
+t.setFinance(projectLedger);
+const operational=t.compute();
+assert.equal(operational.gross,17594);
+assert.equal(operational.fuel,4901);
+assert.equal(operational.wear,1437);
+assert.equal(operational.car,5628);
+let budget=t.projectSummary();
+assert.equal(budget.generated,7065);
+assert.equal(budget.available,7065);
+assert.equal(budget.plannedC,22728);
+assert.equal(budget.pendingCount,1);
+assert.equal(budget.remainingByItem,22728);
+assert.equal(budget.toFinance,15663);
+assert.equal(budget.actualPaid,0);
+// A planned goal doesn't create another deposit or debit.
+projectLedger.carProject.items[0].targetC=23000;
+assert.equal(t.projectSummary().available,7065);
+assert.equal(t.projectSummary().toFinance,15935);
+// A real fund purchase is a debit ONCE, never an operating expense.
+projectLedger.carProject.payments.push({id:"purchase1",itemId:"p1",source:"fundo",type:"compra",date:"2026-10-24",amountC:2000});
+budget=t.projectSummary();
+assert.equal(budget.available,5065);
+assert.equal(budget.fundPaid,2000);
+assert.equal(budget.actualPaid,2000);
+assert.equal(budget.remainingByItem,21000);
+assert.equal(t.compute().gross,operational.gross);
+assert.equal(t.compute().result,operational.result);
+assert.equal(projectLedger.expenses.length,0);
+// Payment edits recompute the balance, without new deposits.
+projectLedger.carProject.payments[0].amountC=3500;
+assert.equal(t.projectSummary().available,3565);
+projectLedger.carProject.payments=[];
+assert.equal(t.projectSummary().available,7065);
+// Existing operating expenses can be LINKED without charging the fund twice.
+projectLedger.expenses.push({id:"oper1",date:"2026-10-24",kind:"extra",category:"Manutenção",amountC:1200});
+const baseWithExpense=t.projectSummary();
+projectLedger.carProject.payments.push({id:"link1",itemId:"p1",source:"despesa",expenseId:"oper1",amountC:1200,type:"servico",date:"2026-10-24"});
+budget=t.projectSummary();
+assert.equal(budget.generated,baseWithExpense.generated);
+assert.equal(budget.available,baseWithExpense.available);
+assert.equal(budget.actualPaid,1200);
+// A removed existing expense invalidates the link rather than creating fictitious payment.
+projectLedger.expenses=[];
+assert.equal(t.projectSummary().payments[0].invalid,true);
+assert.equal(t.projectSummary().actualPaid,0);
+assert.equal(t.projectSummary().available,7065);
+projectLedger.carProject.payments=[];
+projectLedger.carProject.items.splice(0,1);
+assert.equal(t.projectSummary().plannedC,0);
 t.setFinance(d);
 const parsed=t.guessAmounts("Valor da corrida R$ 22,50 e percurso de 9,4 km");
 assert.equal(parsed.money,"22,50");
