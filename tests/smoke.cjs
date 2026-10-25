@@ -4,7 +4,7 @@ const vm=require("node:vm");
 const assert=require("node:assert/strict");
 let code=readFileSync("app.js","utf8");
 assert.match(code,/start\(\);\s*\}\)\(\);\s*$/);
-code=code.replace(/start\(\);\s*\}\)\(\);\s*$/,'globalThis.__test={defaults,normalize,compute,activeTurn,shiftRides,kmRide,sumRide,guessAmounts,datetimeLocal,weekBounds,weeklyGoalState,weeklyGoalCard,projectSummary,projectItemPaid,setFinance:(v)=>finance=v};})();');
+code=code.replace(/start\(\);\s*\}\)\(\);\s*$/,'globalThis.__test={defaults,normalize,compute,activeTurn,shiftRides,kmRide,sumRide,guessAmounts,datetimeLocal,weekBounds,weeklyGoalState,weeklyGoalCard,projectSummary,projectItemPaid,projectComboSummaries,setFinance:(v)=>finance=v};})();');
 const root={innerHTML:""},toast={classList:{add(){},remove(){}},style:{},textContent:""};
 const sandbox={document:{getElementById:id=>id==="app"?root:toast},window:{addEventListener(){}},Intl,Date,Number,String,Object,Array,Math,crypto:{randomUUID:()=>"unit-test-id"},console,setTimeout,clearTimeout};
 vm.runInNewContext(code,sandbox,{timeout:5000});
@@ -130,6 +130,48 @@ assert.equal(t.projectSummary().available,7065);
 projectLedger.carProject.payments=[];
 projectLedger.carProject.items.splice(0,1);
 assert.equal(t.projectSummary().plannedC,0);
+t.setFinance(d);
+
+// 13 listed products, all bundled once; a bundle is a VIEW, not a duplicate goal.
+const prices=[
+ ["kwid-a1",22728,"seguranca"],["kwid-a2",90000,"seguranca"],
+ ["kwid-b1",13576,"exterior"],["kwid-b2",2290,"exterior"],["kwid-b3",4590,"exterior"],
+ ["kwid-c1",13752,"iluminacao"],["kwid-c2",9690,"iluminacao"],
+ ["kwid-d1",51277,"praticidade"],["kwid-d2",50508,"interior"],
+ ["kwid-d3",3490,"interior"],["kwid-d4",2099,"interior"],
+ ["kwid-d5",9952,"praticidade"],["kwid-d6",4295,"praticidade"]
+];
+assert.equal(prices.reduce((sum,x)=>sum+x[1],0),278247);
+const packageLedger=t.defaults();packageLedger.goals=[];
+packageLedger.carProject.items=prices.map(([id,targetC,bundle])=>({id,targetC,bundle,
+ name:id,category:bundle,status:"planejado",active:true,quantity:id==="kwid-a2"?2:1,priceHistory:[],
+ priceProvisional:id==="kwid-a2",requiresVerification:["kwid-a1","kwid-c1","kwid-c2"].includes(id),verificationConfirmed:false}));
+packageLedger.carProject.payments=[];
+packageLedger.shifts=[{id:"done",date:"2026-10-23",status:"closed",km:95.8,grossC:17594,
+ kmPerL:13,fuelPriceC:665,wearPerKmC:15,otherC:0}];
+t.setFinance(packageLedger);
+let combo=t.projectComboSummaries();
+assert.equal(combo.length,5);
+assert.deepEqual(Array.from(combo.map(x=>x.total)),[112728,65524,20456,56097,23442]);
+assert.equal(combo.reduce((sum,x)=>sum+x.items.length,0),13);
+assert.equal(combo.reduce((sum,x)=>sum+x.total,0),278247);
+assert.equal(t.projectSummary().plannedC,278247);
+const reservedBefore=t.projectSummary().available;
+assert.equal(reservedBefore,7065);
+assert.equal(t.projectSummary().actualPaid,0);
+// Quotation update preserves historical value and doesn't touch money.
+const tire=packageLedger.carProject.items.find(x=>x.id==="kwid-a2");
+const prev=tire.targetC;
+tire.targetC=92000;
+tire.priceHistory.push({date:"2026-10-26",oldC:prev,newC:92000,reason:"Nova cotação"});
+assert.equal(t.projectComboSummaries()[0].total,114728);
+assert.equal(t.projectSummary().plannedC,280247);
+assert.equal(t.projectSummary().available,reservedBefore);
+assert.equal(tire.priceHistory[0].oldC,90000);
+assert.equal(tire.priceHistory[0].newC,92000);
+// Planned goals and prices do not create payments or recurring savings.
+assert.equal(packageLedger.carProject.payments.length,0);
+assert.equal(packageLedger.expenses.length,0);
 t.setFinance(d);
 const parsed=t.guessAmounts("Valor da corrida R$ 22,50 e percurso de 9,4 km");
 assert.equal(parsed.money,"22,50");
