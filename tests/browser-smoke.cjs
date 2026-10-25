@@ -135,7 +135,7 @@ async function run(){
   await page.locator(".footnav [data-go=gastos]").click();
   await page.locator('#expenseForm select[name="category"]').selectOption("Manutenção");
   await page.locator('#expenseForm input[name="amount"]').fill("4.30");
-  await page.locator('#expenseForm button[type="submit"]').click();
+  await page.locator('#expenseForm button').click();
   await page.waitForFunction(()=>JSON.parse(localStorage.getItem("mock_ledger")).data.expenses.length===2);
   await page.locator(".footnav [data-go=metas]").click();
   const afterExpenseBalance=await projectBalance();
