@@ -743,6 +743,7 @@ function carProjectPage(){
  const pack=ordered.filter(x=>x.bundle==="primeiro"&&x.active!==false);
  const packTotal=pack.reduce((n,x)=>n+(Number(x.targetC)||0),0);
  const paySelect=ordered.filter(x=>x.status!=="cancelado").map(x=>[x.id,(x.code?x.code+" · ":"")+x.name]);
+ const categoryTotals=projectCategories.map(([category,label])=>({category,label,paid:s.payments.filter(x=>!x.invalid&&projectItem(x.itemId)?.category===category).reduce((n,x)=>n+x.amountC,0)}));
  const paidItems=s.payments.slice().reverse();
  const recent=paidItems.length?paidItems.map(p=>{
   const g=projectItem(p.itemId),whenPaid=p.date?when(p.date):"Sem data";
@@ -779,6 +780,7 @@ function carProjectPage(){
  '<div><small>Falta pagar nos itens cotados</small><b>'+BRL(s.remainingByItem)+'</b></div>'+
  '<div><small>Ainda falta financiar</small><b>'+BRL(s.toFinance)+'</b></div></div>'+
  '<div class="car-alert">Preços de anúncios são referências. Existem '+s.pendingCount+' metas ativas sem preço definido; o orçamento final será maior. O fundo não é comprometido por itens apenas planejados.</div>'+
+ '<details class="car-categories"><summary>Gastos reais por categoria</summary><div class="car-category-rows">'+categoryTotals.map(x=>line(x.label,BRL(x.paid))).join("")+'</div><small>Inclui pagamentos registrados no projeto e despesas operacionais vinculadas, sem somá-las duas vezes ao resultado.</small></details>'+
  '<section class="car-bundle"><div class="row"><b>Primeiro Pacote — Kwid</b><strong>'+BRL(packTotal)+'</strong></div><small>'+pack.map(x=>esc(x.name)).join(" · ")+'</small><p>Itens independentes. Duto condicionado à avaliação mecânica; pneus e segurança têm preferência sobre estética.</p></section>'+
  '<div class="car-section-head"><h2>Metas e serviços</h2><span>'+ordered.length+' registros</span></div>'+
  '<div class="car-items">'+(list||'<p>Nenhuma meta cadastrada.</p>')+'</div>'+
@@ -817,6 +819,18 @@ function carProjectPage(){
 
 /* Forms and atomic actions share save_driver_ledger revision-safe persistence. */
 goals=carProjectPage;
+function reconcileProjectPaymentStates(d,ids){
+ for(const id of new Set(ids.filter(Boolean))){
+  const g=d.carProject?.items.find(x=>x.id===id);if(!g||["instalado","cancelado"].includes(g.status))continue;
+  const paid=d.carProject.payments.filter(p=>p.itemId===id).reduce((sum,p)=>{
+   const expense=p.source==="despesa"?d.expenses.find(x=>x.id===p.expenseId):null;
+   return sum+(p.source==="despesa"?(Number(expense?.amountC)||0):(Number(p.amountC)||0));
+  },0);
+  if(g.targetC!==null&&g.targetC!==undefined&&paid>=Number(g.targetC)&&paid>0)g.status="comprado";
+  else if(paid>0&&["planejado","reservando","comprado"].includes(g.status))g.status="reservando";
+  else if(paid===0&&["comprado","reservando"].includes(g.status))g.status="planejado";
+ }
+}
 const projectPreviousSubmit=submit;
 submit=async function(ev){
  const form=ev.currentTarget,kind=form?.id;
@@ -872,15 +886,7 @@ submit=async function(ev){
     const at=p.payments.findIndex(x=>x.id===newPay.id);
     if(at>=0)p.payments[at]=newPay;else p.payments.push(newPay);
     d.carProject=p;
-    const g=p.items.find(x=>x.id===itemId);
-    if(g&&["planejado","reservando"].includes(g.status)){
-     const paid=p.payments.filter(x=>x.itemId===itemId).reduce((n,x)=>{
-      const linked=x.source==="despesa"?d.expenses.find(e=>e.id===x.expenseId):null;
-      return n+(x.source==="despesa"?(Number(linked?.amountC)||0):(Number(x.amountC)||0));
-     },0);
-     if(g.targetC!=null&&paid>=g.targetC)g.status="comprado";
-     else if(paid>0)g.status="reservando";
-    }
+    reconcileProjectPaymentStates(d,[itemId,old?.itemId]);
    })){editCarPaymentId="";newPaymentItemId="";render();notify("Pagamento confirmado e registrado uma única vez.");}
    return;
   }
@@ -906,7 +912,7 @@ bind=function(){
   if(name==="delpay"){
    const payment=finance.carProject.payments.find(p=>p.id===id);if(!payment)return;
    if(!confirm("Excluir este pagamento do histórico? Se ele foi pago com o fundo, o valor voltará ao saldo CALCULADO. Isso não estorna nenhum pagamento real."))return;
-   await save(d=>{d.carProject.payments=d.carProject.payments.filter(p=>p.id!==id)});
+   await save(d=>{d.carProject.payments=d.carProject.payments.filter(p=>p.id!==id);reconcileProjectPaymentStates(d,[payment.itemId])});
    return;
   }
   if(name==="delitem"){
