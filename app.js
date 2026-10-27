@@ -6,7 +6,7 @@ const SUPA_KEY="sb_publishable_G4fHYtKJ2JcWraKe4_fUNQ_pdwv2TMG";
 const out=document.getElementById("app"), toast=document.getElementById("toast");
 let client=null,account=null,finance=null,revision=0,screenName="inicio",editId="",authMode="login",saving=false,lastSaved=null;
 const opt={fuelPriceC:665,kmPerL:13,wearPerKmC:15,driverPct:50,workDaysPerWeek:4,vehicleName:"Meu carro",dailyGoalC:15000,weeklyGoalC:60000,weeklyStartDate:null,maxShiftMinutes:300};
-const defaults=()=>({version:3,settings:{...opt},goals:[{id:"tires",name:"2 pneus",targetC:null,importance:"seguranca",status:"planejada"},{id:"part",name:"Peça do carro",targetC:20000,importance:"obrigatoria",status:"planejada"}],carProject:{vehicle:{model:"Renault Kwid Zen 1.0 MT",manufactureYear:2021,modelYear:2022,color:"Branca",transmission:"Manual",wheels:"Aro 14, aço e calotas"},items:[],payments:[]},shifts:[],expenses:[]});
+const defaults=()=>({version:3,settings:{...opt},goals:[{id:"tires",name:"2 pneus",targetC:null,importance:"seguranca",status:"planejada"},{id:"part",name:"Peça do carro",targetC:20000,importance:"obrigatoria",status:"planejada"}],carProject:{vehicle:{model:"Renault Kwid Zen 1.0 MT",manufactureYear:2021,modelYear:2022,color:"Branca",transmission:"Manual",wheels:"Aro 14, aço e calotas"},items:[],payments:[]},shifts:[],expenses:[],personalWithdrawals:[]});
 const $=sel=>document.querySelector(sel);
 const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const BRL=c=>new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format((Number(c)||0)/100);
@@ -25,7 +25,7 @@ const notify=(msg,error=false)=>{toast.textContent=msg;toast.style.background=er
 function normalize(raw){
  if(!raw||![1,2,3].includes(raw.version)||!Array.isArray(raw.shifts)||!Array.isArray(raw.expenses))throw Error("Backup financeiro incompatível.");
  let goals=Array.isArray(raw.goals)?raw.goals:defaults().goals;
- return {version:3,settings:{...opt,...raw.settings},goals:goals.map(g=>({...g,importance:g.importance||(g.id==="tires"?"seguranca":g.id==="part"?"obrigatoria":"upgrade"),status:g.status||"planejada"})),shifts:raw.shifts,expenses:raw.expenses,carProject:raw.carProject&&Array.isArray(raw.carProject.items)&&Array.isArray(raw.carProject.payments)?raw.carProject:defaults().carProject};
+ return {version:3,settings:{...opt,...raw.settings},goals:goals.map(g=>({...g,importance:g.importance||(g.id==="tires"?"seguranca":g.id==="part"?"obrigatoria":"upgrade"),status:g.status||"planejada"})),shifts:raw.shifts,expenses:raw.expenses,personalWithdrawals:Array.isArray(raw.personalWithdrawals)?raw.personalWithdrawals:[],carProject:raw.carProject&&Array.isArray(raw.carProject.items)&&Array.isArray(raw.carProject.payments)?raw.carProject:defaults().carProject};
 }
 function compute(){
  const d=finance,a={gross:0,fuel:0,wear:0,extraShifts:0,packages:0,extra:0,km:0,mins:0,days:0};
@@ -988,6 +988,73 @@ bind=function(){
   };
   source?.addEventListener("change",sync);expense?.addEventListener("change",sync);sync();
  }
+};
+
+
+/* Personal spending from cash receipts: cash-flow use only, never operating cost
+   and never a second debit from the Kwid reserve. */
+let editPersonalId="";
+const personalCategories=[["telefone","Telefone e internet"],["alimentacao","Alimentação e mercado"],["moradia","Moradia"],["outros","Outras despesas pessoais"]];
+const cashPersonal=(d=finance)=>Array.isArray(d?.personalWithdrawals)?d.personalWithdrawals:[];
+function personalSummary(d=finance){
+ const list=cashPersonal(d);
+ return {total:list.reduce((n,x)=>n+(Number(x.amountC)||0),0),count:list.length};
+}
+const personalPreviousExpenses=expenses;
+expenses=function(){
+ const records=cashPersonal().slice().sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+ const summary=personalSummary();
+ const edit=cashPersonal().find(x=>x.id===editPersonalId);
+ return '<section class="personal-spending card" id="personalSpending"><div class="section-overline">DESTINO DOS GANHOS EM DINHEIRO</div>'+
+ '<h2>Retiradas pessoais</h2><p class="muted">Dinheiro das corridas usado fora do trabalho. Não reduz o faturamento da 99, os custos operacionais nem a reserva do carro.</p>'+
+ '<div class="personal-spent-total">'+BRL(summary.total)+' <small>utilizados em '+summary.count+' movimentação(ões)</small></div>'+
+ '<form id="personalForm">'+
+ inpt("date","Data da retirada","date",edit?.date||today(),"required")+
+ '<label>Categoria<select name="category">'+projectFormOptions(personalCategories,edit?.category||"outros")+'</select></label>'+
+ inpt("amount","Valor efetivamente utilizado (R$)","number",edit?fmtMoneyInput(edit.amountC):"","required min=0.01 step=0.01 inputmode=decimal")+
+ inpt("description","Descrição","text",edit?.description||"","required maxlength=160")+
+ '<button class="btn block" type="submit">'+(edit?"Salvar alteração":"Registrar retirada pessoal")+'</button>'+
+ (edit?'<button class="btn secondary block" type="button" data-personal-action="cancel">Cancelar edição</button>':"")+'</form>'+
+ '<div class="personal-history">'+(records.length?records.map(x=>
+ '<div class="personal-history-item"><div class="row"><b>'+esc(x.description)+'</b><b>'+BRL(x.amountC)+'</b></div><small>'+esc(when(x.date))+' · Dinheiro em espécie recebido na 99 · '+esc(personalCategories.find(c=>c[0]===x.category)?.[1]||x.category)+'</small>'+
+ '<div class="car-actions"><button type="button" data-personal-action="edit" data-personal-id="'+esc(x.id)+'">Editar</button>'+
+ '<button type="button" data-personal-action="remove" data-personal-id="'+esc(x.id)+'">Excluir</button></div></div>'
+ ).join(""):'<p class="muted">Nenhuma retirada pessoal lançada.</p>')+'</div>'+
+ '<p class="field-hint">O saldo apresentado no aplicativo 99 deve ser consultado separadamente; não é calculado a partir destas retiradas.</p></section>'+
+ personalPreviousExpenses();
+};
+const personalPreviousSubmit=submit;
+submit=async function(ev){
+ if(ev.currentTarget?.id!=="personalForm")return personalPreviousSubmit(ev);
+ ev.preventDefault();
+ const form=ev.currentTarget;
+ try{
+  const date=fval(form,"date"),category=fval(form,"category"),
+   amountC=cent(fval(form,"amount")),description=fval(form,"description").trim();
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||date>today()||
+   !personalCategories.some(x=>x[0]===category)||!Number.isSafeInteger(amountC)||amountC<=0||
+   !description||description.length>160)throw Error("Informe data real, categoria, valor e descrição.");
+  const id=editPersonalId||rid();
+  if(await save(d=>{
+   d.personalWithdrawals=cashPersonal(d);
+   const at=d.personalWithdrawals.findIndex(x=>x.id===id);
+   const item={id,date,category,amountC,description,source:"99_cash",shiftId:at>=0?d.personalWithdrawals[at].shiftId:null};
+   if(at>=0)d.personalWithdrawals[at]=item;else d.personalWithdrawals.push(item);
+  })){editPersonalId="";notify("Retirada pessoal salva sem reduzir a reserva do Kwid.");}
+ }catch(err){notify(err.message||"Não foi possível salvar a retirada.",true)}
+};
+const personalPreviousBind=bind;
+bind=function(){
+ personalPreviousBind();
+ out.querySelectorAll("[data-personal-action]").forEach(btn=>btn.addEventListener("click",async()=>{
+  const action=btn.dataset.personalAction,id=btn.dataset.personalId;
+  if(action==="cancel"){editPersonalId="";render();return}
+  if(action==="edit"){editPersonalId=id;render();out.querySelector("#personalSpending")?.scrollIntoView({block:"start"});return}
+  if(action==="remove"){
+   if(!confirm("Excluir esta retirada pessoal? Não é um estorno bancário."))return;
+   await save(d=>{d.personalWithdrawals=cashPersonal(d).filter(x=>x.id!==id)});
+  }
+ }));
 };
 
 start();
