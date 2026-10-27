@@ -226,7 +226,7 @@ async function run(){
   assert.equal(personalState.shifts.reduce((n,x)=>n+(x.grossC||0),0),incomeBefore);
   assert.equal(personalState.expenses.length,expensesBefore);
   assert.equal(personalState.carProject.payments.length,projectPaidBefore);
-  assert.match(await page.locator(".personal-spent-total").innerText(),/95,00/);
+  assert.match(await page.locator("#personalSpending .personal-spent-total").innerText(),/95,00/);
   await page.locator('[data-personal-action="edit"]').first().click();
   await page.locator('#personalForm input[name="amount"]').fill("28.50");
   await page.locator('#personalForm button[type=submit]').click();
@@ -235,6 +235,25 @@ async function run(){
   await page.locator('[data-personal-action="remove"]').first().click();
   await page.waitForFunction(()=>JSON.parse(localStorage.getItem("mock_ledger")).data.personalWithdrawals?.length===1);
 
+
+
+  // Cash-paid fuel top-ups: create two receipts and keep them out of operational expenses.
+  await page.locator("#fuelPurchaseForm").waitFor();
+  const beforeFuel=await page.evaluate(()=>JSON.parse(localStorage.getItem("mock_ledger")).data);
+  const expenseCountBeforeFuel=beforeFuel.expenses.length;
+  const carPurchasesBeforeFuel=beforeFuel.carProject.payments.length;
+  await page.locator('#fuelPurchaseForm input[name="amount"]').fill("30.00");
+  await page.locator('#fuelPurchaseForm button[type="submit"]').click();
+  await page.waitForFunction(()=>JSON.parse(localStorage.getItem("mock_ledger")).data.fuelPurchases?.length===1);
+  await page.locator('#fuelPurchaseForm input[name="amount"]').fill("70.00");
+  await page.locator('#fuelPurchaseForm button[type="submit"]').click();
+  await page.waitForFunction(()=>JSON.parse(localStorage.getItem("mock_ledger")).data.fuelPurchases?.length===2);
+  const fuelState=await page.evaluate(()=>JSON.parse(localStorage.getItem("mock_ledger")).data);
+  assert.equal(fuelState.fuelPurchases.reduce((n,x)=>n+x.amountC,0),10000);
+  assert.equal(fuelState.fuelPurchases.every(x=>x.fundingSource==="cash_99"),true);
+  assert.equal(fuelState.expenses.length,expenseCountBeforeFuel);
+  assert.equal(fuelState.carProject.payments.length,carPurchasesBeforeFuel);
+  assert.match(await page.locator("#fuelTracker .personal-spent-total").innerText(),/100,00/);
 
   // The urgent goal is loaded from persisted ledger and cannot deduct the car reserve.
   await page.evaluate(()=>{
