@@ -308,6 +308,7 @@ async function run(){
   await page.waitForFunction(()=>JSON.parse(localStorage.getItem("mock_ledger")).data.shifts.at(-1).screenshots?.length===2);
   const evidenceState=await page.evaluate(()=>JSON.parse(localStorage.getItem("mock_ledger")).data.shifts.at(-1));
   assert.equal(evidenceState.screenshots.length,2);
+  assert.equal(await page.locator(".capture-gallery [data-capture-open]").count(),2);
   assert.equal(evidenceState.rides.filter(r=>r.source==="ocr99").length,2);
   assert.equal(evidenceState.rides.at(-1).valueC,432);
   assert.ok(evidenceState.rides.at(-1).evidence.path.includes("99-batch"));
