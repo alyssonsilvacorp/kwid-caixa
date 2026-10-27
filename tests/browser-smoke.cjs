@@ -235,6 +235,56 @@ async function run(){
   await page.locator('[data-personal-action="remove"]').first().click();
   await page.waitForFunction(()=>JSON.parse(localStorage.getItem("mock_ledger")).data.personalWithdrawals?.length===1);
 
+
+  // The urgent goal is loaded from persisted ledger and cannot deduct the car reserve.
+  await page.evaluate(()=>{
+   const x=JSON.parse(localStorage.getItem("mock_ledger"));
+   x.data.urgentGoal={id:"test-urgent",startDate:"2026-10-27",dueDate:"2026-11-03",
+    bills:[{id:"a",label:"Conta fixa A",targetC:55000},{id:"b",label:"Conta fixa B",targetC:40000},
+      {id:"c",label:"Conta fixa C",targetC:30000},{id:"d",label:"Conta fixa D",targetC:7000}],
+    transfers:[],payments:[]};
+   x.rev++;
+   localStorage.setItem("mock_ledger",JSON.stringify(x));
+  });
+  await page.reload({waitUntil:"load"});
+  await page.locator(".urgent-card").waitFor();
+  assert.match(await page.locator(".urgent-card").innerText(),/1.320,00/);
+  await page.locator('.urgent-card [data-go="urgente"]').click();
+  await page.locator("#urgentReserveForm").waitFor();
+  await page.locator('#urgentReserveForm input[name="amount"]').fill("20.00");
+  page.once("dialog",dialog=>dialog.accept());
+  await page.locator('#urgentReserveForm button[type="submit"]').click();
+  await page.waitForFunction(()=>JSON.parse(localStorage.getItem("mock_ledger")).data.urgentGoal.transfers.length===1);
+  await page.locator('#urgentPayForm input[name="amount"]').fill("10.00");
+  await page.locator('#urgentPayForm select[name="source"]').selectOption("reservado");
+  page.once("dialog",dialog=>dialog.accept());
+  await page.locator('#urgentPayForm button[type="submit"]').click();
+  await page.waitForFunction(()=>JSON.parse(localStorage.getItem("mock_ledger")).data.urgentGoal.payments.length===1);
+  const urg=await page.evaluate(()=>JSON.parse(localStorage.getItem("mock_ledger")).data.urgentGoal);
+  assert.equal(urg.transfers.reduce((n,v)=>n+v.amountC,0),2000);
+  assert.equal(urg.payments.reduce((n,v)=>n+v.amountC,0),1000);
+  // Batch text mode: paste a 99 history segment, review, import as real ride.
+  await page.locator('.footnav [data-go="turno"]').click();
+  await page.locator('[data-go="captura"]').click();
+  await page.locator("#capturePasteText").waitFor();
+  const mostRecent=await page.evaluate(()=>JSON.parse(localStorage.getItem("mock_ledger")).data.shifts.at(-1));
+  const formattedDate=mostRecent.date.split("-").reverse().join("/");
+  const sourceClock=mostRecent.start||"23:59";
+  await page.locator("#capturePasteText").fill([formattedDate+" "+sourceClock,
+   "Ganhos pagos no app","Pop R$12,34","Rua Um, Maceió - AL","Rua Dois, Maceió - AL","Pedido finalizado"].join("\n"));
+  await page.locator("#captureReadText").click();
+  await page.locator(".capture-row").waitFor();
+  assert.equal(await page.locator(".capture-row").count(),1);
+  assert.equal(await page.locator('.capture-row input[name="amount"]').inputValue(),"12.34");
+  page.once("dialog",dialog=>dialog.accept());
+  await page.locator("#captureCommit").click();
+  await page.waitForFunction(()=>JSON.parse(localStorage.getItem("mock_ledger")).data.shifts.at(-1).rides.some(r=>r.source==="ocr99"));
+  const afterBatch=await page.evaluate(()=>JSON.parse(localStorage.getItem("mock_ledger")).data);
+  assert.equal(afterBatch.shifts.at(-1).rides.filter(r=>r.source==="ocr99").length,1);
+  assert.equal(afterBatch.shifts.at(-1).rides.find(r=>r.source==="ocr99").valueC,1234);
+  assert.equal(afterBatch.urgentGoal.transfers.length,1);
+  assert.equal(afterBatch.personalWithdrawals.length,1);
+
   assert.equal(errors.length,0,errors.join(" | "));
   console.log("PASS: mobile login, start, reload, ride, finish, financial dashboard");
  }finally{await browser.close()}
