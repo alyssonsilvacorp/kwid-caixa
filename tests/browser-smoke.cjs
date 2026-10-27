@@ -286,6 +286,34 @@ async function run(){
   assert.equal(afterBatch.urgentGoal.transfers.length,1);
   assert.equal(afterBatch.personalWithdrawals.length,1);
 
+  // Mock only the recognition engine: verify MULTIPLE iPhone images, duplicate filtering,
+  // private receipt uploads and attachment references in a real browser form.
+  await page.route("https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js",route=>
+    route.fulfill({status:200,contentType:"application/javascript",
+      body:"window.Tesseract={createWorker:async()=>({recognize:async()=>({data:{text:window.__mockOcrText}})})};"}));
+  await page.locator(".footnav [data-go=turno]").click();
+  await page.locator('[data-go="captura"]').click();
+  await page.evaluate(text=>{window.__mockOcrText=text},[
+    formattedDate+" "+sourceClock,"Ganhos pagos no app","Pop Expresso R$4,32",
+    "Rua Um, Maceió - AL","Rua Dois, Maceió - AL","Pedido finalizado"].join("\n"));
+  await page.locator("#captureImages").setInputFiles([
+   {name:"primeiro.png",mimeType:"image/png",buffer:Buffer.from("image-test-1")},
+   {name:"segundo.png",mimeType:"image/png",buffer:Buffer.from("image-test-2")}
+  ]);
+  await page.locator("#captureReadImages").click();
+  await page.waitForFunction(()=>document.querySelector(".capture-row"));
+  assert.equal(await page.locator(".capture-row").count(),1); // overlapping screenshots deduped
+  page.once("dialog",dialog=>dialog.accept());
+  await page.locator("#captureCommit").click();
+  await page.waitForFunction(()=>JSON.parse(localStorage.getItem("mock_ledger")).data.shifts.at(-1).screenshots?.length===2);
+  const evidenceState=await page.evaluate(()=>JSON.parse(localStorage.getItem("mock_ledger")).data.shifts.at(-1));
+  assert.equal(evidenceState.screenshots.length,2);
+  assert.equal(evidenceState.rides.filter(r=>r.source==="ocr99").length,2);
+  assert.equal(evidenceState.rides.at(-1).valueC,432);
+  assert.ok(evidenceState.rides.at(-1).evidence.path.includes("99-batch"));
+  assert.equal(evidenceState.km,0); // estimates never change vehicle odometer
+
+
   assert.equal(errors.length,0,errors.join(" | "));
   console.log("PASS: mobile login, start, reload, ride, finish, financial dashboard");
  }finally{await browser.close()}
