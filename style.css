@@ -295,3 +295,43 @@ body:has(.auth-premium){background:radial-gradient(ellipse 67% 55% at 50% 12%,#1
 .personal-history-item{background:#152526;border:1px solid #365549;border-radius:12px;padding:12px}
 .personal-history-item .row{gap:9px}.personal-history-item .row b{font-size:13px}
 .personal-history-item small{font-size:11px;color:#b1cbbd;line-height:1.45;display:block;margin:7px 0}
+
+
+/* Urgent cash goal: highlights deadlines, keeps car operational reserve unchanged. */
+.urgent-card{margin:13px 0 17px;padding:17px 15px;border-radius:20px;background:linear-gradient(136deg,#3c2922 0%,#221c21 88%);border:1px solid #b78054;box-shadow:inset 0 1px #ffdcad26,0 12px 24px #0003}
+.urgent-top{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.urgent-top span{font-size:10px;color:#f3c48a;font-weight:840;letter-spacing:.85px}
+.urgent-top strong{font-size:12px;color:#ffddba}
+.urgent-total{font-size:31px;font-weight:840;letter-spacing:-.7px;color:#fff5e9;margin:14px 0}
+.urgent-total small{font-size:14px;color:#d8bb9c;font-weight:550}
+.urgent-progress{background:#53433a;border-radius:99px;height:10px;overflow:hidden}
+.urgent-progress>div{background:linear-gradient(90deg,#de995a,#ffdb91);height:100%;border-radius:99px}
+.urgent-stats{display:flex;justify-content:space-between;align-items:center;margin:10px 0;color:#ffe3bc;font-size:12px}
+.urgent-card p{font-size:11px;color:#dfc5ac;line-height:1.65;margin:10px 0}
+.urgent-card button{margin-top:11px;border-color:#926d51}
+.urgent-bill{border-bottom:1px solid #ffffff17;padding:12px 0}
+.urgent-bill label{margin-bottom:10px}
+.urgent-bill small{font-size:11px;color:#b9d5be}
+.capture-launch{background:linear-gradient(115deg,#1d423a,#1d373c);border:1px solid #4d9881;color:#d7fae7;margin-bottom:11px}
+.capture-upload,.capture-existing,.capture-paste{margin:13px 0}
+.capture-upload input[type=file]{padding:12px;background:#1d312e;border:1px dashed #578774;border-radius:12px}
+.capture-progress{font-size:11px;line-height:1.5;color:#b7e6cb;margin:9px 0}
+.capture-paste summary{cursor:pointer;color:#bbf2d5;font-weight:730}
+.capture-paste textarea{margin-top:12px;width:100%;min-height:140px}
+.capture-review-head{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:7px;margin:17px 0 8px}
+.capture-review-head h2{margin:0;font-size:18px}
+.capture-review-head span{color:#a2e4bf;font-weight:760;font-size:13px}
+.capture-review{display:flex;flex-direction:column;gap:11px}
+.capture-row{padding:15px 13px;background:linear-gradient(135deg,#192a2a,#162124);border-radius:16px;border:1px solid #416355}
+.capture-duplicate{opacity:.67}
+.capture-accept{display:flex;align-items:center;gap:7px;font-size:13px;font-weight:700}
+.capture-accept input,.capture-checkbox input{width:18px;height:18px;flex-shrink:0}
+.capture-accept span{font-size:11px;font-weight:500;color:#b1c8bb;margin-left:auto}
+.capture-row .grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.capture-row input,.capture-row select{min-width:0;width:100%}
+.capture-row-footer{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:7px;margin-top:10px}
+.capture-row-footer small{font-size:10px;color:#bad5c3}
+.capture-km{font-size:10px;line-height:1.5;color:#9abdae;margin:9px 0 0}
+.capture-warning{color:#f2d4a2;font-size:11px;line-height:1.55;padding:9px;background:#5240274d;border-radius:9px;margin:9px 0}
+.capture-checkbox{display:flex;align-items:flex-start;gap:9px;line-height:1.55;font-size:12px}
+@media(max-width:380px){.urgent-total{font-size:27px}.capture-row .grid{grid-template-columns:1fr}}
