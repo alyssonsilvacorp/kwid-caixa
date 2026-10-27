@@ -281,3 +281,17 @@ body:has(.auth-premium){background:radial-gradient(ellipse 67% 55% at 50% 12%,#1
 .car-price-history summary{cursor:pointer;font-size:11px;font-weight:750;color:#a3ddbf}
 .car-price-history p{font-size:11px;color:#bccfc2;margin:8px 0 0;line-height:1.5}
 @media(max-width:370px){.car-combo-top b{font-size:15px}.car-combo-top h3{font-size:14px}}
+
+
+/* Personal money outflows: not business costs or reserve debits. */
+.personal-spending{border:1px solid #506b61;background:linear-gradient(145deg,#1a2b2a,#192128)}
+.personal-spending .section-overline{font-size:10px;color:#a4ebc3;letter-spacing:1.1px;font-weight:800}
+.personal-spending h2{margin:7px 0 6px}
+.personal-spending>.muted{font-size:11px;line-height:1.55}
+.personal-spent-total{padding:12px 0;font-size:27px;font-weight:820;color:#e7ffec;display:flex;align-items:baseline;gap:9px;flex-wrap:wrap}
+.personal-spent-total small{font-size:11px;color:#9bbeb2;font-weight:450}
+.personal-spending form{border-top:1px solid #476453;padding-top:12px}
+.personal-history{display:flex;flex-direction:column;gap:10px;margin-top:16px}
+.personal-history-item{background:#152526;border:1px solid #365549;border-radius:12px;padding:12px}
+.personal-history-item .row{gap:9px}.personal-history-item .row b{font-size:13px}
+.personal-history-item small{font-size:11px;color:#b1cbbd;line-height:1.45;display:block;margin:7px 0}
