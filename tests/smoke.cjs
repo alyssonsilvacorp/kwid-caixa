@@ -4,7 +4,7 @@ const vm=require("node:vm");
 const assert=require("node:assert/strict");
 let code=readFileSync("app.js","utf8");
 assert.match(code,/start\(\);\s*\}\)\(\);\s*$/);
-code=code.replace(/start\(\);\s*\}\)\(\);\s*$/,'globalThis.__test={defaults,normalize,compute,activeTurn,shiftRides,kmRide,sumRide,guessAmounts,datetimeLocal,weekBounds,weeklyGoalState,weeklyGoalCard,projectSummary,projectItemPaid,projectComboSummaries,personalSummary,setFinance:(v)=>finance=v};})();');
+code=code.replace(/start\(\);\s*\}\)\(\);\s*$/,'globalThis.__test={defaults,normalize,compute,activeTurn,shiftRides,kmRide,sumRide,guessAmounts,datetimeLocal,weekBounds,weeklyGoalState,weeklyGoalCard,projectSummary,projectItemPaid,projectComboSummaries,personalSummary,urgentState,setFinance:(v)=>finance=v};})();');
 const root={innerHTML:""},toast={classList:{add(){},remove(){}},style:{},textContent:""};
 const sandbox={document:{getElementById:id=>id==="app"?root:toast},window:{addEventListener(){}},Intl,Date,Number,String,Object,Array,Math,crypto:{randomUUID:()=>"unit-test-id"},console,setTimeout,clearTimeout};
 vm.runInNewContext(code,sandbox,{timeout:5000});
@@ -193,6 +193,36 @@ separate.personalWithdrawals[0].amountC=6900;
 assert.equal(t.personalSummary().total,9700);
 separate.personalWithdrawals.pop();
 assert.equal(t.personalSummary().total,6900);
+t.setFinance(d);
+
+// Urgent R$1320 fixed-bills goal uses personal cash only; car allocation is unchanged.
+const u=t.defaults();
+u.goals=[];
+u.urgentGoal={id:"urg",startDate:"2026-10-27",dueDate:"2026-11-03",
+ bills:[{id:"a",label:"Conta 1",targetC:55000},{id:"b",label:"Conta 2",targetC:40000},{id:"c",label:"Conta 3",targetC:30000},{id:"d",label:"Conta 4",targetC:7000}],
+ transfers:[],payments:[]};
+u.shifts=[{id:"earn",date:"2026-10-27",status:"closed",grossC:17594,km:95.8,kmPerL:13,fuelPriceC:665,wearPerKmC:15,otherC:0}];
+t.setFinance(u);
+const originalCar=t.compute().car;
+const originalPersonal=t.compute().personal;
+assert.equal(t.urgentState().target,132000);
+assert.equal(t.urgentState().covered,0);
+assert.equal(t.urgentState().availableEstimate,originalPersonal);
+u.urgentGoal.transfers.push({id:"res",amountC:20000,date:"2026-10-27"});
+assert.equal(t.urgentState().balance,20000);
+assert.equal(t.urgentState().remaining,112000);
+u.urgentGoal.payments.push({id:"pa",billId:"a",amountC:5000,date:"2026-10-27",source:"reservado"});
+assert.equal(t.urgentState().balance,15000);
+assert.equal(t.urgentState().paid,5000);
+assert.equal(t.urgentState().covered,20000);
+u.urgentGoal.payments.push({id:"pb",billId:"b",amountC:4000,date:"2026-10-27",source:"direto"});
+assert.equal(t.urgentState().covered,24000);
+assert.equal(t.urgentState().remaining,108000);
+assert.equal(t.compute().car,originalCar);
+assert.equal(t.compute().personal,originalPersonal);
+assert.equal(t.compute().gross,17594);
+u.screenshotDrafts=[{id:"draft",date:"2026-10-26",valueC:18500}];
+assert.equal(t.compute().gross,17594); // Unapproved OCR rows NEVER enter finances.
 t.setFinance(d);
 const parsed=t.guessAmounts("Valor da corrida R$ 22,50 e percurso de 9,4 km");
 assert.equal(parsed.money,"22,50");
