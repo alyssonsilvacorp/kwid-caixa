@@ -6,7 +6,7 @@ const SUPA_KEY="sb_publishable_G4fHYtKJ2JcWraKe4_fUNQ_pdwv2TMG";
 const out=document.getElementById("app"), toast=document.getElementById("toast");
 let client=null,account=null,finance=null,revision=0,screenName="inicio",editId="",authMode="login",saving=false,lastSaved=null;
 const opt={fuelPriceC:665,kmPerL:13,wearPerKmC:15,driverPct:50,workDaysPerWeek:4,vehicleName:"Meu carro",dailyGoalC:15000,weeklyGoalC:60000,weeklyStartDate:null,maxShiftMinutes:300};
-const defaults=()=>({version:3,settings:{...opt},goals:[{id:"tires",name:"2 pneus",targetC:null,importance:"seguranca",status:"planejada"},{id:"part",name:"Peça do carro",targetC:20000,importance:"obrigatoria",status:"planejada"}],carProject:{vehicle:{model:"Renault Kwid Zen 1.0 MT",manufactureYear:2021,modelYear:2022,color:"Branca",transmission:"Manual",wheels:"Aro 14, aço e calotas"},items:[],payments:[]},shifts:[],expenses:[],personalWithdrawals:[],urgentGoal:null,screenshotDrafts:[]});
+const defaults=()=>({version:3,settings:{...opt},goals:[{id:"tires",name:"2 pneus",targetC:null,importance:"seguranca",status:"planejada"},{id:"part",name:"Peça do carro",targetC:20000,importance:"obrigatoria",status:"planejada"}],carProject:{vehicle:{model:"Renault Kwid Zen 1.0 MT",manufactureYear:2021,modelYear:2022,color:"Branca",transmission:"Manual",wheels:"Aro 14, aço e calotas"},items:[],payments:[]},shifts:[],expenses:[],personalWithdrawals:[],fuelPurchases:[],urgentGoal:null,screenshotDrafts:[]});
 const $=sel=>document.querySelector(sel);
 const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const BRL=c=>new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format((Number(c)||0)/100);
@@ -25,7 +25,7 @@ const notify=(msg,error=false)=>{toast.textContent=msg;toast.style.background=er
 function normalize(raw){
  if(!raw||![1,2,3].includes(raw.version)||!Array.isArray(raw.shifts)||!Array.isArray(raw.expenses))throw Error("Backup financeiro incompatível.");
  let goals=Array.isArray(raw.goals)?raw.goals:defaults().goals;
- return {version:3,settings:{...opt,...raw.settings},goals:goals.map(g=>({...g,importance:g.importance||(g.id==="tires"?"seguranca":g.id==="part"?"obrigatoria":"upgrade"),status:g.status||"planejada"})),shifts:raw.shifts,expenses:raw.expenses,personalWithdrawals:Array.isArray(raw.personalWithdrawals)?raw.personalWithdrawals:[],urgentGoal:raw.urgentGoal&&Array.isArray(raw.urgentGoal.bills)?raw.urgentGoal:null,screenshotDrafts:Array.isArray(raw.screenshotDrafts)?raw.screenshotDrafts:[],carProject:raw.carProject&&Array.isArray(raw.carProject.items)&&Array.isArray(raw.carProject.payments)?raw.carProject:defaults().carProject};
+ return {version:3,settings:{...opt,...raw.settings},goals:goals.map(g=>({...g,importance:g.importance||(g.id==="tires"?"seguranca":g.id==="part"?"obrigatoria":"upgrade"),status:g.status||"planejada"})),shifts:raw.shifts,expenses:raw.expenses,personalWithdrawals:Array.isArray(raw.personalWithdrawals)?raw.personalWithdrawals:[],fuelPurchases:Array.isArray(raw.fuelPurchases)?raw.fuelPurchases:[],urgentGoal:raw.urgentGoal&&Array.isArray(raw.urgentGoal.bills)?raw.urgentGoal:null,screenshotDrafts:Array.isArray(raw.screenshotDrafts)?raw.screenshotDrafts:[],carProject:raw.carProject&&Array.isArray(raw.carProject.items)&&Array.isArray(raw.carProject.payments)?raw.carProject:defaults().carProject};
 }
 function compute(){
  const d=finance,a={gross:0,fuel:0,wear:0,extraShifts:0,packages:0,extra:0,km:0,mins:0,days:0};
@@ -1452,6 +1452,83 @@ bind=function(){
   captureMerge(drafts.map(x=>({...x,source:"Prévia do chat, sem arquivo anexado",uncertain:true,fileIndex:null})));
   render();notify("Prévia carregada. Confira os valores e anexe os prints originais se desejar.");
  });
+};
+
+
+/* Cash paid at gas stations is logged for cash-flow and fuel fill-up history.
+   Fuel consumption is already estimated by kilometers in compute(); actual
+   top-ups are NEVER a second operational expense or second reserve deduction. */
+let editFuelPurchaseId="";
+function fuelPurchaseList(d=finance){return Array.isArray(d?.fuelPurchases)?d.fuelPurchases:[]}
+function fuelPurchaseSummary(d=finance){
+ const entries=fuelPurchaseList(d);
+ return {count:entries.length,totalC:entries.reduce((n,x)=>n+(Number(x.amountC)||0),0)};
+}
+const fuelPreviousExpenses=expenses;
+expenses=function(){
+ const entries=fuelPurchaseList().slice().sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+ const sum=fuelPurchaseSummary();
+ const edit=fuelPurchaseList().find(x=>x.id===editFuelPurchaseId);
+ return '<section class="card fuel-tracker" id="fuelTracker">'+
+ '<div class="section-overline">COMBUSTÍVEL E CAIXA</div><h2>Abastecimentos reais</h2>'+
+ '<p class="muted">Controle de dinheiro usado no posto e histórico de abastecimento. O consumo já é estimado por quilometragem: estes valores não serão descontados novamente do lucro ou da reserva do Kwid.</p>'+
+ '<div class="personal-spent-total">'+BRL(sum.totalC)+' <small>em '+sum.count+' abastecimento(s) registrados</small></div>'+
+ '<form id="fuelPurchaseForm">'+
+ inpt("date","Data do abastecimento","date",edit?.date||today(),"required")+
+ inpt("amount","Quanto pagou (R$)","number",edit?fmtMoneyInput(edit.amountC):"","required min=0.01 step=0.01 inputmode=decimal")+
+ sel("fundingSource","Origem do dinheiro",[["cash_99","Dinheiro em espécie recebido na 99"],["app_transfer","Saldo da plataforma transferido"],["other","Outro dinheiro"]],edit?.fundingSource||"cash_99")+
+ '<div class="grid">'+inpt("liters","Litros (opcional)","number",edit?.liters??"","min=0.01 step=0.001 inputmode=decimal")+
+ inpt("odometer","Odômetro no posto (opcional)","number",edit?.odometer??"","min=0 step=0.1 inputmode=decimal")+'</div>'+
+ inpt("note","Observação (opcional)","text",edit?.note||"","maxlength=180")+
+ '<button class="btn block" type="submit">'+(edit?"Salvar abastecimento":"Registrar abastecimento")+'</button>'+
+ (edit?'<button class="btn secondary block" type="button" data-fuel-action="cancel">Cancelar edição</button>':"")+
+ '</form>'+
+ '<h3>Histórico dos postos</h3><div class="personal-history">'+(entries.length?entries.map(x=>
+ '<div class="personal-history-item"><div class="row"><b>'+esc(when(x.date))+'</b><b>'+BRL(x.amountC)+'</b></div>'+
+ '<small>'+(x.fundingSource==="cash_99"?"Dinheiro das corridas em espécie":x.fundingSource==="app_transfer"?"Saldo transferido da plataforma":"Outra origem")+
+ (x.liters?' · '+esc(x.liters)+' L':"")+(x.odometer!=null?' · '+esc(x.odometer)+' km':"")+
+ (x.note?' · '+esc(x.note):"")+'</small>'+
+ '<div class="car-actions"><button type="button" data-fuel-action="edit" data-fuel-id="'+esc(x.id)+'">Editar</button>'+
+ '<button type="button" data-fuel-action="delete" data-fuel-id="'+esc(x.id)+'">Excluir</button></div></div>'
+ ).join(""):'<p class="muted">Nenhum abastecimento registrado.</p>')+'</div></section>'+
+ fuelPreviousExpenses();
+};
+const fuelPreviousSubmit=submit;
+submit=async function(ev){
+ if(ev.currentTarget?.id!=="fuelPurchaseForm")return fuelPreviousSubmit(ev);
+ ev.preventDefault();
+ const form=ev.currentTarget;
+ try{
+  const date=fval(form,"date"),amountC=cent(fval(form,"amount")),fundingSource=fval(form,"fundingSource");
+  const litersText=fval(form,"liters"),odoText=fval(form,"odometer"),note=fval(form,"note");
+  const liters=litersText?num(litersText):null,odometer=odoText?num(odoText):null;
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||date>today()||
+     !Number.isSafeInteger(amountC)||amountC<=0||!["cash_99","app_transfer","other"].includes(fundingSource)||
+     (liters!==null&&(!Number.isFinite(liters)||liters<=0))||
+     (odometer!==null&&(!Number.isFinite(odometer)||odometer<0))||note.length>180)
+    throw Error("Informe um valor e data reais. Litros e odômetro são opcionais.");
+  const id=editFuelPurchaseId||rid();
+  if(await save(d=>{
+   if(!Array.isArray(d.fuelPurchases))d.fuelPurchases=[];
+   const p=d.fuelPurchases.findIndex(x=>x.id===id);
+   const previous=p>=0?d.fuelPurchases[p]:{};
+   const item={...previous,id,date,amountC,fundingSource,liters,odometer,note,source:"informado_pelo_motorista"};
+   if(p<0)d.fuelPurchases.push(item);else d.fuelPurchases[p]=item;
+  })){editFuelPurchaseId="";notify("Abastecimento registrado no caixa, sem duplicar custo do carro.");}
+ }catch(e){notify(e.message||"Não foi possível registrar abastecimento",true)}
+};
+const fuelPreviousBind=bind;
+bind=function(){
+ fuelPreviousBind();
+ out.querySelectorAll("[data-fuel-action]").forEach(button=>button.addEventListener("click",async()=>{
+  const op=button.dataset.fuelAction,id=button.dataset.fuelId;
+  if(op==="cancel"){editFuelPurchaseId="";render();return}
+  if(op==="edit"){editFuelPurchaseId=id;render();out.querySelector("#fuelTracker")?.scrollIntoView({block:"start"});return}
+  if(op==="delete"){
+   if(!confirm("Excluir este abastecimento registrado? Isso não estorna pagamento no posto."))return;
+   await save(d=>{d.fuelPurchases=(d.fuelPurchases||[]).filter(x=>x.id!==id)});
+  }
+ }));
 };
 
 start();
