@@ -1237,7 +1237,7 @@ function capturePage(){
  '<p class="capture-warning">A pré-seleção é apenas uma sugestão. Valores, endereços e itens repetidos devem ser verificados; uma recompensa pode já estar incluída em um total consolidado.</p>'+
  '<div class="capture-review">'+rows+'</div>'+
  '<div class="card">'+
- '<label class="capture-checkbox"><input type="checkbox" id="captureReplaceManual"> Substituir os lançamentos manuais existentes neste turno (se forem apenas testes ou duplicações). Não altera o odômetro nem as despesas.</label>'+
+ '<label class="capture-checkbox"><input type="checkbox" id="captureReplaceManual"> Substituir lançamentos manuais ou faturamento consolidado deste turno, apenas se já estiverem duplicados nos prints. Não altera o odômetro nem as despesas.</label>'+
  '<p class="field-hint">O aplicativo anexará os prints selecionados em armazenamento privado. Se esta prévia veio do chat, selecione os próprios prints acima para anexá-los.</p>'+
  '<button type="button" class="btn block bright-large" id="captureCommit">Conferir e salvar registros aprovados</button></div>'
  :'<div class="help">Nenhuma leitura ainda. Você pode selecionar múltiplas imagens, ou abrir a prévia dos screenshots já enviados no chat.</div>')+
@@ -1341,6 +1341,11 @@ function captureReviewedValues(){
 async function captureCommit(){
  if(batchBusy)return;
  const target=batchTarget();if(!target){notify("Selecione um turno válido.",true);return}
+ const hasConsolidated=(Number(target.grossC)||0)>sumRide(target);
+ const replaceRequested=Boolean(out.querySelector("#captureReplaceManual")?.checked);
+ if(hasConsolidated&&!replaceRequested){
+  notify("Este turno já tem faturamento consolidado sem corridas individuais. Marque a substituição consciente para evitar duplicar ou zerar receita.",true);return;
+ }
  let rows;try{rows=captureReviewedValues()}catch(e){notify(e.message,true);return}
  if(!rows.length){notify("Selecione ao menos um registro conferido.",true);return}
  const positive=rows.filter(r=>r.valueC>0),negative=rows.filter(r=>r.valueC<0);
@@ -1349,7 +1354,7 @@ async function captureCommit(){
  const p=positive.reduce((n,r)=>n+r.valueC,0);
  const msg="Confirmar importação de "+positive.length+" ganho(s) ("+BRL(p)+") e "+negative.length+" ajuste(s) apenas para conferência?"+
  (manualTotal&&!replaceManual?"\nAtenção: lançamentos manuais existentes ("+BRL(manualTotal)+") serão mantidos e podem duplicar valores.":"")+
- (replaceManual?"\nLançamentos manuais do turno serão SUBSTITUÍDOS.":"")+
+ (replaceManual?"\nLançamentos manuais ou totais consolidados deste turno serão SUBSTITUÍDOS.":"")+
  "\nA quilometragem do odômetro permanecerá intacta.";
  if(!confirm(msg))return;
  batchBusy=true;
@@ -1390,7 +1395,7 @@ async function captureCommit(){
    shift.grossC=sumRide(shift);
    shift.reportedTrips=shift.rides.filter(r=>r.kind!=="recompensa").length;
    // Keep odometer-based km. Never overwrite s.km with a shortest-route estimate.
-   if(shift.odoEnd==null)shift.km=0;
+   if(shift.odoEnd==null)shift.km=kmRide(shift); // retain known per-ride km during active turn; imported route estimates are excluded.
   });
   if(!succeeded)throw Error("Falha ao salvar os lançamentos; arquivos enviados serão removidos.");
   batchRows=[];batchFiles=[];batchTargetId=target.id;
