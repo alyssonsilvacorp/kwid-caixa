@@ -1197,7 +1197,7 @@ function batchReviewRows(){
  return {rows,included};
 }
 function capturePage(){
- const t=batchTarget(),info=batchReviewRows(),drafts=Array.isArray(finance.screenshotDrafts)?finance.screenshotDrafts:[];
+ const t=batchTarget(),info=batchReviewRows(),drafts=(Array.isArray(finance.screenshotDrafts)?finance.screenshotDrafts:[]).filter(x=>!x.reviewed);
  const approved=info.included.reduce((sum,x)=>sum+x.valueC,0);
  const rows=info.rows.map((r,i)=>{
   const valid=window.RodaOCR.acceptedForShift(r,t);
@@ -1396,6 +1396,8 @@ async function captureCommit(){
    shift.rides=[...remaining,...added];
    shift.importedAdjustments=[...(shift.importedAdjustments||[]),...adjustment];
    shift.screenshots=[...(shift.screenshots||[]),...paths.filter(Boolean)];
+   const importedFingerprints=new Set(accepted.map(x=>x.fingerprint));
+   d.screenshotDrafts=(d.screenshotDrafts||[]).map(x=>importedFingerprints.has(x.fingerprint)?{...x,reviewed:true,reviewedAt:today()}:x);
    shift.grossC=sumRide(shift);
    shift.reportedTrips=shift.rides.filter(r=>r.kind!=="recompensa").length;
    // Keep odometer-based km. Never overwrite s.km with a shortest-route estimate.
@@ -1445,7 +1447,7 @@ bind=function(){
  out.querySelector("#captureCommit")?.addEventListener("click",captureCommit);
  out.querySelectorAll("[data-estimate-route]").forEach(btn=>btn.addEventListener("click",()=>routeEstimate(Number(btn.dataset.estimateRoute))));
  out.querySelector("#captureLoadDrafts")?.addEventListener("click",()=>{
-  const drafts=finance.screenshotDrafts||[];
+  const drafts=(finance.screenshotDrafts||[]).filter(x=>!x.reviewed);
   const target=finance.shifts.find(s=>s.date==="2026-10-26");if(target)batchTargetId=target.id;
   captureMerge(drafts.map(x=>({...x,source:"Prévia do chat, sem arquivo anexado",uncertain:true,fileIndex:null})));
   render();notify("Prévia carregada. Confira os valores e anexe os prints originais se desejar.");
