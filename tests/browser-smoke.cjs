@@ -203,6 +203,38 @@ async function run(){
   db=await page.evaluate(()=>JSON.parse(localStorage.getItem("mock_ledger")).data);
   assert.equal(db.carProject.payments.length,1);
   assert.equal(db.carProject.items[0].verificationConfirmed,true);
+
+  // Real iPhone UI: personal withdrawals are recorded from cash and do not alter operations.
+  await page.locator(".footnav [data-go=gastos]").click();
+  await page.locator("#personalForm").waitFor();
+  const beforePersonal=await page.evaluate(()=>JSON.parse(localStorage.getItem("mock_ledger")).data);
+  const incomeBefore=beforePersonal.shifts.reduce((n,x)=>n+(x.grossC||0),0);
+  const expensesBefore=beforePersonal.expenses.length;
+  const projectPaidBefore=beforePersonal.carProject.payments.length;
+  await page.locator('#personalForm input[name="description"]').fill("Plano TIM");
+  await page.locator('#personalForm input[name="amount"]').fill("67.00");
+  await page.locator('#personalForm select[name="category"]').selectOption("telefone");
+  await page.locator('#personalForm button[type=submit]').click();
+  await page.waitForFunction(()=>JSON.parse(localStorage.getItem("mock_ledger")).data.personalWithdrawals?.length===1);
+  await page.locator('#personalForm input[name="description"]').fill("Alimentação e compras para casa");
+  await page.locator('#personalForm input[name="amount"]').fill("28.00");
+  await page.locator('#personalForm select[name="category"]').selectOption("alimentacao");
+  await page.locator('#personalForm button[type=submit]').click();
+  await page.waitForFunction(()=>JSON.parse(localStorage.getItem("mock_ledger")).data.personalWithdrawals?.length===2);
+  let personalState=await page.evaluate(()=>JSON.parse(localStorage.getItem("mock_ledger")).data);
+  assert.equal(personalState.personalWithdrawals.reduce((n,x)=>n+x.amountC,0),9500);
+  assert.equal(personalState.shifts.reduce((n,x)=>n+(x.grossC||0),0),incomeBefore);
+  assert.equal(personalState.expenses.length,expensesBefore);
+  assert.equal(personalState.carProject.payments.length,projectPaidBefore);
+  assert.match(await page.locator(".personal-spent-total").innerText(),/95,00/);
+  await page.locator('[data-personal-action="edit"]').first().click();
+  await page.locator('#personalForm input[name="amount"]').fill("28.50");
+  await page.locator('#personalForm button[type=submit]').click();
+  await page.waitForFunction(()=>JSON.parse(localStorage.getItem("mock_ledger")).data.personalWithdrawals.some(x=>x.amountC===2850));
+  page.once("dialog",dialog=>dialog.accept());
+  await page.locator('[data-personal-action="remove"]').first().click();
+  await page.waitForFunction(()=>JSON.parse(localStorage.getItem("mock_ledger")).data.personalWithdrawals?.length===1);
+
   assert.equal(errors.length,0,errors.join(" | "));
   console.log("PASS: mobile login, start, reload, ride, finish, financial dashboard");
  }finally{await browser.close()}
