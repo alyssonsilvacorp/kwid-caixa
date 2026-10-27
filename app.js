@@ -6,7 +6,7 @@ const SUPA_KEY="sb_publishable_G4fHYtKJ2JcWraKe4_fUNQ_pdwv2TMG";
 const out=document.getElementById("app"), toast=document.getElementById("toast");
 let client=null,account=null,finance=null,revision=0,screenName="inicio",editId="",authMode="login",saving=false,lastSaved=null;
 const opt={fuelPriceC:665,kmPerL:13,wearPerKmC:15,driverPct:50,workDaysPerWeek:4,vehicleName:"Meu carro",dailyGoalC:15000,weeklyGoalC:60000,weeklyStartDate:null,maxShiftMinutes:300};
-const defaults=()=>({version:3,settings:{...opt},goals:[{id:"tires",name:"2 pneus",targetC:null,importance:"seguranca",status:"planejada"},{id:"part",name:"Peça do carro",targetC:20000,importance:"obrigatoria",status:"planejada"}],carProject:{vehicle:{model:"Renault Kwid Zen 1.0 MT",manufactureYear:2021,modelYear:2022,color:"Branca",transmission:"Manual",wheels:"Aro 14, aço e calotas"},items:[],payments:[]},shifts:[],expenses:[],personalWithdrawals:[]});
+const defaults=()=>({version:3,settings:{...opt},goals:[{id:"tires",name:"2 pneus",targetC:null,importance:"seguranca",status:"planejada"},{id:"part",name:"Peça do carro",targetC:20000,importance:"obrigatoria",status:"planejada"}],carProject:{vehicle:{model:"Renault Kwid Zen 1.0 MT",manufactureYear:2021,modelYear:2022,color:"Branca",transmission:"Manual",wheels:"Aro 14, aço e calotas"},items:[],payments:[]},shifts:[],expenses:[],personalWithdrawals:[],urgentGoal:null,screenshotDrafts:[]});
 const $=sel=>document.querySelector(sel);
 const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const BRL=c=>new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format((Number(c)||0)/100);
@@ -25,7 +25,7 @@ const notify=(msg,error=false)=>{toast.textContent=msg;toast.style.background=er
 function normalize(raw){
  if(!raw||![1,2,3].includes(raw.version)||!Array.isArray(raw.shifts)||!Array.isArray(raw.expenses))throw Error("Backup financeiro incompatível.");
  let goals=Array.isArray(raw.goals)?raw.goals:defaults().goals;
- return {version:3,settings:{...opt,...raw.settings},goals:goals.map(g=>({...g,importance:g.importance||(g.id==="tires"?"seguranca":g.id==="part"?"obrigatoria":"upgrade"),status:g.status||"planejada"})),shifts:raw.shifts,expenses:raw.expenses,personalWithdrawals:Array.isArray(raw.personalWithdrawals)?raw.personalWithdrawals:[],carProject:raw.carProject&&Array.isArray(raw.carProject.items)&&Array.isArray(raw.carProject.payments)?raw.carProject:defaults().carProject};
+ return {version:3,settings:{...opt,...raw.settings},goals:goals.map(g=>({...g,importance:g.importance||(g.id==="tires"?"seguranca":g.id==="part"?"obrigatoria":"upgrade"),status:g.status||"planejada"})),shifts:raw.shifts,expenses:raw.expenses,personalWithdrawals:Array.isArray(raw.personalWithdrawals)?raw.personalWithdrawals:[],urgentGoal:raw.urgentGoal&&Array.isArray(raw.urgentGoal.bills)?raw.urgentGoal:null,screenshotDrafts:Array.isArray(raw.screenshotDrafts)?raw.screenshotDrafts:[],carProject:raw.carProject&&Array.isArray(raw.carProject.items)&&Array.isArray(raw.carProject.payments)?raw.carProject:defaults().carProject};
 }
 function compute(){
  const d=finance,a={gross:0,fuel:0,wear:0,extraShifts:0,packages:0,extra:0,km:0,mins:0,days:0};
@@ -1055,6 +1055,126 @@ bind=function(){
    await save(d=>{d.personalWithdrawals=cashPersonal(d).filter(x=>x.id!==id)});
   }
  }));
+};
+
+
+/* Contas urgentes: funds are earmarked only after a real user-confirmed movement.
+   Earnings forecast prioritizes the existing PERSONAL share. It does not reduce,
+   redistribute, or duplicate the car reserve defined by compute(). */
+function urgentState(d=finance){
+ const g=d?.urgentGoal;if(!g)return null;
+ const bills=Array.isArray(g.bills)?g.bills:[];
+ const target=bills.reduce((sum,b)=>sum+(Number(b.targetC)||0),0);
+ const transfers=Array.isArray(g.transfers)?g.transfers:[];
+ const payments=Array.isArray(g.payments)?g.payments:[];
+ const deposited=transfers.reduce((n,x)=>n+(Number(x.amountC)||0),0);
+ const paid=payments.reduce((n,x)=>n+(Number(x.amountC)||0),0);
+ const fromReserve=payments.filter(x=>x.source==="reservado").reduce((n,x)=>n+(Number(x.amountC)||0),0);
+ const balance=Math.max(0,deposited-fromReserve);
+ const covered=Math.min(target,balance+paid);
+ const remaining=Math.max(0,target-covered);
+ const days=daysUntil(g.dueDate);
+ const eligible=(d.shifts||[]).filter(s=>s.date>=g.startDate&&s.status==="closed");
+ const estimatedPersonal=eligible.reduce((sum,s)=>{
+  const fuel=(Number(s.kmPerL)||0)>0?Math.round((Number(s.km)||0)/s.kmPerL*(Number(s.fuelPriceC)||0)):0;
+  const wear=Math.round((Number(s.km)||0)*(Number(s.wearPerKmC)||0));
+  const plans=(d.expenses||[]).filter(x=>x.shiftId===s.id).reduce((n,x)=>n+(Number(x.amountC)||0),0);
+  const n=Math.max(0,(Number(s.grossC)||0)-fuel-wear-plans-(Number(s.otherC)||0));
+  return sum+Math.floor(n*(Number(d.settings.driverPct)||0)/100);
+ },0);
+ const personallyUsed=(d.personalWithdrawals||[]).filter(x=>x.date>=g.startDate).reduce((n,x)=>n+(Number(x.amountC)||0),0);
+ const availableEstimate=Math.max(0,estimatedPersonal-personallyUsed-deposited-payments.filter(x=>x.source==="direto").reduce((n,x)=>n+(Number(x.amountC)||0),0));
+ return {target,paid,deposited,balance,covered,remaining,days,bills,transfers,payments,availableEstimate,
+  percent:target?Math.round(covered/target*100):100,blocked:remaining>0};
+}
+function urgentCard(){
+ const x=urgentState();if(!x)return "";
+ const due=finance.urgentGoal.dueDate;
+ return '<section class="urgent-card" id="urgentCard">'+
+ '<div class="urgent-top"><span>PRIORIDADE MÁXIMA · CONTAS FIXAS</span><strong>Até '+esc(when(due))+'</strong></div>'+
+ '<div class="urgent-total">'+BRL(x.covered)+' <small>/ '+BRL(x.target)+'</small></div>'+
+ '<div class="urgent-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+x.percent+'"><div style="width:'+x.percent+'%"></div></div>'+
+ '<div class="urgent-stats"><span>'+(x.blocked?'Faltam '+BRL(x.remaining):'Meta coberta!')+'</span><b>'+x.percent+'%</b></div>'+
+ '<p>'+(x.blocked?'Priorize esta meta antes de novas economias pessoais e compras opcionais. O fundo de segurança e manutenção do Kwid permanece calculado normalmente.':
+ 'Objetivo coberto. Você já pode rever as outras metas.')+'</p>'+
+ '<button class="btn secondary block" type="button" data-go="urgente">Ver contas, reservas e pagamentos →</button></section>';
+}
+function urgentPage(){
+ const x=urgentState(),g=finance.urgentGoal;
+ if(!x)return '<h1>Metas urgentes</h1><p>Nenhuma meta urgente cadastrada.</p>';
+ const hist=x.transfers.map(t=>'<div class="entry">'+line("Reserva confirmada",BRL(t.amountC))+'<small>'+esc(when(t.date))+'</small></div>').join("");
+ const pays=x.payments.map(p=>'<div class="entry">'+line((g.bills.find(b=>b.id===p.billId)?.label||"Conta fixa")+" · "+(p.source==="reservado"?"fundo separado":"pago diretamente"),BRL(p.amountC))+'<small>'+esc(when(p.date))+'</small></div>').join("");
+ return '<div class="section-overline">ORGANIZAÇÃO FINANCEIRA</div><h1>Meta urgente</h1>'+
+ '<p class="desc">Prazo até '+esc(when(g.dueDate))+'. Os valores das contas estão registrados, mas os nomes podem ser preenchidos quando você confirmar cada vencimento.</p>'+
+ urgentCard()+
+ '<div class="car-summary-grid"><div><small>Efetivamente separado</small><b>'+BRL(x.balance)+'</b></div><div><small>Contas já pagas</small><b>'+BRL(x.paid)+'</b></div>'+
+ '<div><small>Disponível para separar · estimativa</small><b>'+BRL(x.availableEstimate)+'</b></div><div><small>Falta cobrir</small><b>'+BRL(x.remaining)+'</b></div></div>'+
+ '<p class="car-alert">Reserva confirmada é dinheiro efetivamente guardado, não um cálculo automático. O valor disponível para separar é apenas uma estimativa da parcela pessoal após os custos do carro; não equivale a saldo bancário. Ainda faltam '+Math.max(0,x.days)+' dia(s) até o prazo (ou ele já venceu).</p>'+
+ '<h2>Contas fixas</h2>'+
+ '<form id="urgentBillsForm" class="card">'+g.bills.map((b,i)=>
+ '<div class="urgent-bill">'+
+ '<label>Identificação da conta '+(i+1)+'<input type="text" name="billName'+i+'" value="'+esc(b.label)+'" required maxlength="100"></label>'+
+ inpt("billAmount"+i,"Valor (R$)","number",fmtMoneyInput(b.targetC),"required min=0.01 step=0.01")+
+ '<small>Pago: '+BRL(x.payments.filter(p=>p.billId===b.id).reduce((n,p)=>n+p.amountC,0))+'</small></div>').join("")+
+ inpt("dueDate","Pagar até","date",g.dueDate,"required")+
+ '<button class="btn block" type="submit">Atualizar valores e vencimento</button></form>'+
+ '<h2>Confirmar dinheiro reservado</h2><form class="card" id="urgentReserveForm">'+
+ inpt("amount","Quanto você realmente separou? (R$)","number","","required min=0.01 step=0.01")+
+ inpt("date","Data real","date",today(),"required")+
+ '<button class="btn block" type="submit">Registrar reserva real</button></form>'+
+ '<h2>Registrar conta paga</h2><form class="card" id="urgentPayForm">'+
+ '<label>Conta<select name="billId">'+g.bills.map(b=>'<option value="'+esc(b.id)+'">'+esc(b.label)+' · '+BRL(b.targetC)+'</option>').join("")+'</select></label>'+
+ inpt("amount","Valor efetivamente pago","number","","required min=0.01 step=0.01")+
+ inpt("date","Data do pagamento","date",today(),"required")+
+ '<label>Origem do pagamento<select name="source"><option value="reservado">Usar dinheiro reservado (desconta saldo separado)</option><option value="direto">Paguei diretamente, sem passar pelo reservado</option></select></label>'+
+ '<button class="btn block" type="submit">Confirmar pagamento real</button></form>'+
+ '<h2>Movimentações confirmadas</h2>'+(hist+pays||'<p class="muted">Nenhuma reserva ou conta paga foi informada.</p>')+
+ '<p class="field-hint">O RodaCaixa não realiza transferências ou pagamentos bancários. Cada confirmação registra uma operação que você já fez na vida real.</p>';
+}
+const urgentPreviousHome=home;
+home=function(){return urgentCard()+urgentPreviousHome()};
+const urgentPreviousTurns=turns;
+turns=function(){return urgentCard()+urgentPreviousTurns()};
+const urgentPreviousRender=render;
+render=function(){
+ if(screenName==="urgente"&&account&&finance){mount(urgentPage());return}
+ return urgentPreviousRender();
+};
+const urgentPreviousSubmit=submit;
+submit=async function(ev){
+ const f=ev.currentTarget;
+ if(!["urgentBillsForm","urgentReserveForm","urgentPayForm"].includes(f.id))return urgentPreviousSubmit(ev);
+ ev.preventDefault();
+ try{
+  const g=finance.urgentGoal;if(!g)throw Error("Meta não cadastrada.");
+  if(f.id==="urgentBillsForm"){
+   const updated=g.bills.map((b,i)=>{
+    const name=fval(f,"billName"+i).trim(),value=cent(fval(f,"billAmount"+i));
+    if(!name||!Number.isSafeInteger(value)||value<=0)throw Error("Valor ou nome da conta inválido.");
+    const alreadyPaid=g.payments.filter(p=>p.billId===b.id).reduce((n,p)=>n+p.amountC,0);
+    if(value<alreadyPaid)throw Error("Uma conta não pode ficar abaixo do valor já pago.");
+    return {...b,label:name,targetC:value};
+   });
+   const date=fval(f,"dueDate");
+   if(!/^\d{4}-\d{2}-\d{2}$/.test(date))throw Error("Data inválida.");
+   await save(d=>{d.urgentGoal.bills=updated;d.urgentGoal.dueDate=date;});
+   return;
+  }
+  const amt=cent(fval(f,"amount")),date=fval(f,"date");
+  if(!Number.isSafeInteger(amt)||amt<=0||!/^\d{4}-\d{2}-\d{2}$/.test(date)||date>today())
+   throw Error("Informe data e valor realmente movimentados.");
+  if(f.id==="urgentReserveForm"){
+   if(!confirm("Você já separou de verdade "+BRL(amt)+" para as contas? Isso não movimenta dinheiro no banco."))return;
+   await save(d=>{d.urgentGoal.transfers.push({id:rid(),amountC:amt,date,source:"confirmado_pelo_usuario"});});return;
+  }
+  const billId=fval(f,"billId"),source=fval(f,"source"),bill=g.bills.find(b=>b.id===billId);
+  if(!bill||!["reservado","direto"].includes(source))throw Error("Escolha conta e origem válidas.");
+  const alreadyPaid=g.payments.filter(p=>p.billId===billId).reduce((n,p)=>n+p.amountC,0);
+  if(amt>bill.targetC-alreadyPaid)throw Error("Pagamento excede o saldo da conta.");
+  if(source==="reservado"&&amt>urgentState().balance)throw Error("Você não registrou dinheiro separado suficiente para esse pagamento.");
+  if(!confirm("Confirmar pagamento REAL de "+BRL(amt)+" para "+bill.label+"?"))return;
+  await save(d=>{d.urgentGoal.payments.push({id:rid(),billId,amountC:amt,date,source});});
+ }catch(e){notify(e.message||"Não foi possível salvar.",true)}
 };
 
 start();
