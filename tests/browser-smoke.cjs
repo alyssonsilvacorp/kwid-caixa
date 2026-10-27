@@ -266,6 +266,7 @@ async function run(){
   // Batch text mode: paste a 99 history segment, review, import as real ride.
   await page.locator('.footnav [data-go="turno"]').click();
   await page.locator('[data-go="captura"]').click();
+  await page.locator(".capture-paste summary").click();
   await page.locator("#capturePasteText").waitFor();
   const mostRecent=await page.evaluate(()=>JSON.parse(localStorage.getItem("mock_ledger")).data.shifts.at(-1));
   const formattedDate=mostRecent.date.split("-").reverse().join("/");
