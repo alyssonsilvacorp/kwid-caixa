@@ -1084,7 +1084,10 @@ function urgentState(d=finance){
  },0);
  const personallyUsed=(d.personalWithdrawals||[]).filter(x=>x.date>=g.startDate).reduce((n,x)=>n+(Number(x.amountC)||0),0);
  const availableEstimate=Math.max(0,estimatedPersonal-personallyUsed-deposited-payments.filter(x=>x.source==="direto").reduce((n,x)=>n+(Number(x.amountC)||0),0));
+ const suggestedPriority=Math.min(remaining,availableEstimate);
+ const otherPersonalAfterPriority=Math.max(0,availableEstimate-suggestedPriority);
  return {target,paid,deposited,balance,covered,remaining,days,bills,transfers,payments,availableEstimate,
+  suggestedPriority,otherPersonalAfterPriority,
   percent:target?Math.round(covered/target*100):100,blocked:remaining>0};
 }
 function urgentCard(){
@@ -1108,7 +1111,8 @@ function urgentPage(){
  '<p class="desc">Prazo até '+esc(when(g.dueDate))+'. Os valores das contas estão registrados, mas os nomes podem ser preenchidos quando você confirmar cada vencimento.</p>'+
  urgentCard()+
  '<div class="car-summary-grid"><div><small>Efetivamente separado</small><b>'+BRL(x.balance)+'</b></div><div><small>Contas já pagas</small><b>'+BRL(x.paid)+'</b></div>'+
- '<div><small>Disponível para separar · estimativa</small><b>'+BRL(x.availableEstimate)+'</b></div><div><small>Falta cobrir</small><b>'+BRL(x.remaining)+'</b></div></div>'+
+ '<div><small>Parcela pessoal com prioridade urgente · estimativa</small><b>'+BRL(x.suggestedPriority)+'</b></div><div><small>Falta cobrir</small><b>'+BRL(x.remaining)+'</b></div></div>'+
+ '<div class="urgent-extra-row">'+line("Disponível para outras metas pessoais após priorização",BRL(x.otherPersonalAfterPriority))+'</div>'+
  '<p class="car-alert">Reserva confirmada é dinheiro efetivamente guardado, não um cálculo automático. O valor disponível para separar é apenas uma estimativa da parcela pessoal após os custos do carro; não equivale a saldo bancário. Ainda faltam '+Math.max(0,x.days)+' dia(s) até o prazo (ou ele já venceu).</p>'+
  '<h2>Contas fixas</h2>'+
  '<form id="urgentBillsForm" class="card">'+g.bills.map((b,i)=>
@@ -1409,12 +1413,25 @@ const capturePreviousRender=render;
 render=function(){if(screenName==="captura"&&account&&finance){mount(capturePage());return}return capturePreviousRender()};
 const capturePreviousTurns=turns;
 turns=function(){
+ const gallery=(finance.shifts||[]).slice().reverse().filter(sh=>Array.isArray(sh.screenshots)&&sh.screenshots.length>0);
  return '<button type="button" class="btn block capture-launch" data-go="captura">▧ Importar vários prints da 99</button>'+
- capturePreviousTurns();
+ capturePreviousTurns()+
+ (gallery.length?'<details class="card capture-gallery"><summary>Comprovantes da 99 anexados ('+gallery.reduce((n,s)=>n+s.screenshots.length,0)+')</summary>'+
+ gallery.map(sh=>'<div class="capture-gallery-shift"><h3>'+esc(when(sh.date))+' · '+esc(sh.start||"—")+' às '+esc(sh.end||"em andamento")+'</h3>'+
+ sh.screenshots.map((f,i)=>'<button class="btn secondary tiny" data-capture-open="'+esc(f.path)+'" type="button">'+esc(f.name||("Print "+(i+1)))+'</button>').join("")+'</div>').join("")+'</details>':"");
 };
 const capturePreviousBind=bind;
 bind=function(){
  capturePreviousBind();
+ out.querySelectorAll("[data-capture-open]").forEach(btn=>btn.addEventListener("click",async()=>{
+  const path=btn.dataset.captureOpen;
+  if(!path||!path.startsWith(account.id+"/")){notify("Acesso ao comprovante não autorizado.",true);return}
+  try{
+   const {data,error}=await client.storage.from("driver-receipts").createSignedUrl(path,120);
+   if(error||!data?.signedUrl)throw error||Error("Não foi possível abrir o arquivo");
+   window.location.assign(data.signedUrl);
+  }catch(e){notify("Falha ao abrir comprovante: "+e.message,true)}
+ }));
  const t=out.querySelector("#captureTarget");
  t?.addEventListener("change",()=>{batchTargetId=t.value;render()});
  const fileInput=out.querySelector("#captureImages");
