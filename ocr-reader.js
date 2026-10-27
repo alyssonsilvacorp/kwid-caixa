@@ -64,11 +64,15 @@ function parse99(text,source){
  return out;
 }
 function dedupe(rows,existingFingerprints=[]){
+ const compact=fp=>String(fp).split("|").slice(0,4).join("|");
  const seen=new Set(existingFingerprints);
+ const approximate=new Set(existingFingerprints.map(compact));
  return (rows||[]).map(r=>{
   const fp=r.fingerprint||[r.date,r.clock,r.kind,r.valueC].join("|");
-  const duplicate=seen.has(fp);
-  seen.add(fp);
+  // Different OCR wrapping of the same address must not double count a trip.
+  const short=compact(fp);
+  const duplicate=seen.has(fp)||approximate.has(short);
+  seen.add(fp);approximate.add(short);
   return {...r,fingerprint:fp,duplicate};
  });
 }
