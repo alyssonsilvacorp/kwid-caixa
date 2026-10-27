@@ -4,7 +4,7 @@ const vm=require("node:vm");
 const assert=require("node:assert/strict");
 let code=readFileSync("app.js","utf8");
 assert.match(code,/start\(\);\s*\}\)\(\);\s*$/);
-code=code.replace(/start\(\);\s*\}\)\(\);\s*$/,'globalThis.__test={defaults,normalize,compute,activeTurn,shiftRides,kmRide,sumRide,guessAmounts,datetimeLocal,weekBounds,weeklyGoalState,weeklyGoalCard,projectSummary,projectItemPaid,projectComboSummaries,setFinance:(v)=>finance=v};})();');
+code=code.replace(/start\(\);\s*\}\)\(\);\s*$/,'globalThis.__test={defaults,normalize,compute,activeTurn,shiftRides,kmRide,sumRide,guessAmounts,datetimeLocal,weekBounds,weeklyGoalState,weeklyGoalCard,projectSummary,projectItemPaid,projectComboSummaries,personalSummary,setFinance:(v)=>finance=v};})();');
 const root={innerHTML:""},toast={classList:{add(){},remove(){}},style:{},textContent:""};
 const sandbox={document:{getElementById:id=>id==="app"?root:toast},window:{addEventListener(){}},Intl,Date,Number,String,Object,Array,Math,crypto:{randomUUID:()=>"unit-test-id"},console,setTimeout,clearTimeout};
 vm.runInNewContext(code,sandbox,{timeout:5000});
@@ -172,6 +172,27 @@ assert.equal(tire.priceHistory[0].newC,92000);
 // Planned goals and prices do not create payments or recurring savings.
 assert.equal(packageLedger.carProject.payments.length,0);
 assert.equal(packageLedger.expenses.length,0);
+
+// Personal uses of cash must be segregated from operations, VAT/fees, and car allocations.
+const separate=t.defaults();separate.goals=[];separate.shifts=[{id:"shift",date:"2026-10-26",status:"closed",grossC:17594,km:95.8,kmPerL:13,fuelPriceC:665,wearPerKmC:15,otherC:0}];
+t.setFinance(separate);
+const beforeFinancial=t.compute();
+const beforeFund=t.projectSummary().available;
+separate.personalWithdrawals=[
+ {id:"phone",date:"2026-10-26",category:"telefone",amountC:6700,description:"Plano TIM",source:"99_cash"},
+ {id:"groceries",date:"2026-10-26",category:"alimentacao",amountC:2800,description:"Alimentação e casa",source:"99_cash"}
+];
+assert.equal(t.personalSummary().total,9500);
+assert.equal(t.personalSummary().count,2);
+assert.equal(t.compute().result,beforeFinancial.result);
+assert.equal(t.compute().gross,beforeFinancial.gross);
+assert.equal(t.compute().car,beforeFinancial.car);
+assert.equal(t.projectSummary().available,beforeFund);
+assert.equal(separate.expenses.length,0);
+separate.personalWithdrawals[0].amountC=6900;
+assert.equal(t.personalSummary().total,9700);
+separate.personalWithdrawals.pop();
+assert.equal(t.personalSummary().total,6900);
 t.setFinance(d);
 const parsed=t.guessAmounts("Valor da corrida R$ 22,50 e percurso de 9,4 km");
 assert.equal(parsed.money,"22,50");
