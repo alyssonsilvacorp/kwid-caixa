@@ -1177,5 +1177,258 @@ submit=async function(ev){
  }catch(e){notify(e.message||"Não foi possível salvar.",true)}
 };
 
+
+/* Batch 99 screenshot intake — OCR draft and explicit review before writing a turn.
+   Originals stay private in the existing per-user driver-receipts bucket.
+   Route kilometers are OPTIONAL estimates; never overwrite odometer kilometers. */
+let batchFiles=[],batchRows=[],batchBusy=false,batchTargetId="",batchOCRWorker=null;
+const batchTarget=()=>finance.shifts.find(s=>s.id===batchTargetId)||activeTurn()||finance.shifts[finance.shifts.length-1]||null;
+function batchExistingFingerprintSet(target){
+ return (target?.rides||[]).map(r=>r.ocrFingerprint).filter(Boolean);
+}
+function batchReviewRows(){
+ const target=batchTarget(),known=batchExistingFingerprintSet(target);
+ const rows=(window.RodaOCR?.dedupe(batchRows,known)||batchRows);
+ const included=rows.filter(x=>x.valueC>0&&!x.duplicate&&!x.uncertain&&window.RodaOCR.acceptedForShift(x,target));
+ return {rows,included};
+}
+function capturePage(){
+ const t=batchTarget(),info=batchReviewRows(),drafts=Array.isArray(finance.screenshotDrafts)?finance.screenshotDrafts:[];
+ const approved=info.included.reduce((sum,x)=>sum+x.valueC,0);
+ const rows=info.rows.map((r,i)=>{
+  const valid=window.RodaOCR.acceptedForShift(r,t);
+  const preselected=r.valueC>0&&!r.uncertain&&!r.duplicate&&valid;
+  return '<article class="capture-row '+(r.duplicate?'capture-duplicate':'')+'" data-capture-index="'+i+'">'+
+   '<label class="capture-accept"><input name="accept" type="checkbox" '+(preselected?'checked':'')+' '+(r.duplicate?'disabled':'')+'><b>Importar este registro</b> <span>'+esc(r.kind)+'</span></label>'+
+   (r.duplicate?'<p class="capture-warning">Possível duplicidade — não será importado de novo.</p>':"")+
+   (!valid?'<p class="capture-warning">Data/horário fora do turno selecionado: conferir antes de incluir.</p>':"")+
+   (r.uncertain?'<p class="capture-warning">Leitura incerta, pagamento em processamento ou categoria incompleta: confira.</p>':"")+
+   (r.valueC<0?'<p class="capture-warning">Débito da 99: ficará apenas para conciliação, não reduz automaticamente os ganhos nem cobra pacote duas vezes.</p>':"")+
+   '<div class="grid">'+
+    inpt("date","Data","date",r.date,"required")+
+    inpt("clock","Horário","time",r.clock,"required")+'</div>'+
+   '<div class="grid">'+
+    inpt("amount","Valor (R$)","number",fmtMoneyInput(r.valueC),"required step=0.01")+
+    '<label>Tipo<select name="kind">'+
+    [["pop","Pop"],["pop-expresso","Pop Expresso"],["negocia","Negocia"],["entrega","Entrega carro"],["recompensa","Recompensa"],["outro","Outro / ajuste"]].map(k=>
+    '<option value="'+k[0]+'" '+(k[0]===r.kind?"selected":"")+'>'+k[1]+'</option>').join("")+'</select></label></div>'+
+   '<label>Origem da rota<input name="origin" type="text" value="'+esc(r.origin||"")+'" placeholder="Endereço lido; confira" maxlength="260"></label>'+
+   '<label>Destino da rota<input name="destination" type="text" value="'+esc(r.destination||"")+'" placeholder="Endereço lido; confira" maxlength="260"></label>'+
+   '<div class="capture-row-footer"><small>'+esc(r.source||"Texto colado")+' · '+(r.payment==="cash"?"Dinheiro":r.payment==="app"?"Aplicativo":"Pagamento desconhecido")+'</small>'+
+   '<button type="button" data-estimate-route="'+i+'" class="btn secondary tiny">Estimar KM por endereços</button></div>'+
+   '<p class="capture-km">'+(r.routeEstimateKm!=null?'Rota estimada: '+r.routeEstimateKm.toFixed(1).replace(".",",")+' km · não equivale ao odômetro':
+   'KM não informado. O odômetro do turno continua sendo a referência.')+'</p>'+
+   '</article>';
+ }).join("");
+ return '<div class="section-overline">LEITURA ASSISTIDA DA 99</div><h1>Importar prints</h1>'+
+ '<p class="desc">Escolha vários prints no iPhone. O reconhecimento é feito no aparelho, e você confere os dados antes de salvar. Não é necessário lançar corrida por corrida enquanto dirige.</p>'+
+ '<div class="card capture-upload"><label>Turno de destino<select id="captureTarget">'+finance.shifts.slice().reverse().map(x=>
+ '<option value="'+esc(x.id)+'" '+(t?.id===x.id?"selected":"")+'>'+esc(when(x.date))+' · '+esc(x.start||"—")+'–'+esc(x.end||"em andamento")+' · '+BRL(x.grossC)+'</option>').join("")+'</select></label>'+
+ '<label>Selecionar prints da galeria<input type="file" id="captureImages" accept="image/png,image/jpeg,image/webp,image/heic,image/heif" multiple></label>'+
+ '<small class="field-hint">Selecione até 20 imagens por vez (máximo 10 MB cada). Se o iPhone não conseguir ler HEIC, salve os prints em PNG/JPEG.</small>'+
+ '<button type="button" class="btn block" id="captureReadImages">Ler todos os prints selecionados</button>'+
+ '<p class="capture-progress" id="captureProgress" aria-live="polite">'+(batchFiles.length?batchFiles.length+' imagem(ns) selecionada(s)':'Nenhuma imagem selecionada')+'</p></div>'+
+ (drafts.length?'<div class="card capture-existing"><h2>Prévia das imagens enviadas no chat</h2><p>'+drafts.length+' lançamentos pré-identificados do histórico da 99. Estão pendentes de conferência e não alteraram o faturamento.</p>'+
+ '<button type="button" class="btn secondary block" id="captureLoadDrafts">Revisar prévia do dia 26/10</button></div>':"")+
+ '<details class="card capture-paste"><summary>Alternativa: colar texto reconhecido da 99</summary>'+
+ '<textarea id="capturePasteText" rows="7" placeholder="26/10/2026 22:45&#10;Ganhos pagos no app&#10;Pop R$20,50"></textarea>'+
+ '<button type="button" class="btn block" id="captureReadText">Extrair corridas do texto</button></details>'+
+ (info.rows.length?'<div class="capture-review-head"><h2>Conferir '+info.rows.length+' registro(s)</h2><span>'+BRL(approved)+' pré-selecionados</span></div>'+
+ '<p class="capture-warning">A pré-seleção é apenas uma sugestão. Valores, endereços e itens repetidos devem ser verificados; uma recompensa pode já estar incluída em um total consolidado.</p>'+
+ '<div class="capture-review">'+rows+'</div>'+
+ '<div class="card">'+
+ '<label class="capture-checkbox"><input type="checkbox" id="captureReplaceManual"> Substituir os lançamentos manuais existentes neste turno (se forem apenas testes ou duplicações). Não altera o odômetro nem as despesas.</label>'+
+ '<p class="field-hint">O aplicativo anexará os prints selecionados em armazenamento privado. Se esta prévia veio do chat, selecione os próprios prints acima para anexá-los.</p>'+
+ '<button type="button" class="btn block bright-large" id="captureCommit">Conferir e salvar registros aprovados</button></div>'
+ :'<div class="help">Nenhuma leitura ainda. Você pode selecionar múltiplas imagens, ou abrir a prévia dos screenshots já enviados no chat.</div>')+
+ '<button type="button" class="btn secondary block" data-go="turno">Voltar ao turno</button>';
+}
+function captureSetProgress(txt){const el=out.querySelector("#captureProgress");if(el)el.textContent=txt}
+async function captureLoadLibrary(){
+ if(window.Tesseract)return window.Tesseract;
+ await new Promise((resolve,reject)=>{
+  const tag=document.createElement("script");tag.src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js";
+  tag.onload=resolve;tag.onerror=()=>reject(new Error("Não foi possível baixar o leitor OCR. Verifique a conexão."));document.head.appendChild(tag);
+ });
+ if(!window.Tesseract?.createWorker)throw Error("Leitor de imagens não está disponível.");
+ return window.Tesseract;
+}
+function captureMerge(newRows){
+ const existing=new Set(batchRows.map(r=>r.fingerprint));
+ let added=0;
+ for(const row of newRows){
+  if(existing.has(row.fingerprint))continue;
+  existing.add(row.fingerprint);batchRows.push({...row,id:rid()});added++;
+ }
+ return added;
+}
+async function captureReadImages(){
+ if(batchBusy)return;
+ if(!batchFiles.length){notify("Selecione os prints primeiro.",true);return}
+ batchBusy=true;
+ try{
+  const engine=await captureLoadLibrary();
+  if(!batchOCRWorker)batchOCRWorker=await engine.createWorker("por");
+  let found=0;
+  for(let i=0;i<batchFiles.length;i++){
+   const file=batchFiles[i];
+   captureSetProgress("Lendo imagem "+(i+1)+" de "+batchFiles.length+" · "+file.name);
+   try{
+    const result=await batchOCRWorker.recognize(file);
+    const rows=window.RodaOCR.parse99(result?.data?.text||"",file.name);
+    found+=captureMerge(rows.map(r=>({...r,fileIndex:i})));
+   }catch(e){captureSetProgress("Não foi possível ler "+file.name+": "+e.message)}
+  }
+  captureSetProgress(found+" registro(s) novos extraídos. Revise antes de salvar.");
+  render();
+  notify(found?found+" registros encontrados. Revise e salve apenas os corretos.":"Não identifiquei valores confiáveis. Tente outra imagem ou cole o texto.",!found);
+ }catch(e){notify(e.message||"Falha na leitura OCR.",true)}
+ finally{batchBusy=false}
+}
+function captureReadPasted(){
+ const value=out.querySelector("#capturePasteText")?.value||"";
+ const rows=window.RodaOCR.parse99(value,"Texto colado");
+ const count=captureMerge(rows);
+ render();notify(count?count+" lançamentos extraídos; confira antes de salvar.":"Não foi possível localizar registros de 99 com data, hora e valor.",!count);
+}
+async function routeEstimate(index){
+ const row=batchRows[index],card=out.querySelector('[data-capture-index="'+index+'"]');
+ const origin=card?.querySelector('[name="origin"]')?.value.trim();
+ const destination=card?.querySelector('[name="destination"]')?.value.trim();
+ if(!row||!origin||!destination){notify("Confira e preencha origem e destino.",true);return}
+ if(!confirm("Consultar mapas públicos para estimar esta rota? Os dois endereços serão enviados a serviços externos. É uma estimativa, não o KM real."))return;
+ try{
+  const geo=async(address)=>{
+   const url="https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=br&q="+encodeURIComponent(address+", Alagoas, Brasil");
+   const response=await fetch(url,{headers:{"Accept":"application/json"}});
+   if(!response.ok)throw Error("Geocodificação indisponível");
+   const items=await response.json();if(!items?.[0])throw Error("Endereço não encontrado. Experimente adicionar bairro e cidade.");
+   return items[0];
+  };
+  notify("Calculando rota estimada…");
+  const a=await geo(origin);
+  await new Promise(resolve=>setTimeout(resolve,1150)); // Nominatim public endpoint 1 req/s maximum.
+  const b=await geo(destination);
+  const url="https://router.project-osrm.org/route/v1/driving/"+a.lon+","+a.lat+";"+b.lon+","+b.lat+"?overview=false";
+  const result=await fetch(url);if(!result.ok)throw Error("Serviço de rotas indisponível");
+  const route=(await result.json()).routes?.[0];if(!route?.distance)throw Error("Não foi possível determinar o caminho.");
+  row.routeEstimateKm=Math.round(route.distance/100)/10;
+  row.origin=origin;row.destination=destination;
+  render();notify("Rota estimada: "+row.routeEstimateKm.toFixed(1).replace(".",",")+" km. O KM do odômetro não muda.");
+ }catch(e){notify("Rota indisponível: "+e.message,true)}
+}
+function captureReviewedValues(){
+ const target=batchTarget(),selected=[];
+ for(const card of out.querySelectorAll("[data-capture-index]")){
+  if(!card.querySelector('[name="accept"]')?.checked)continue;
+  const row=batchReviewRows().rows[Number(card.dataset.captureIndex)];
+  const amount=cent(card.querySelector('[name="amount"]').value);
+  const date=card.querySelector('[name="date"]').value,clock=card.querySelector('[name="clock"]').value;
+  const kind=card.querySelector('[name="kind"]').value;
+  if(!Number.isSafeInteger(amount)||amount===0||!/^\d{4}-\d{2}-\d{2}$/.test(date)||!clock)
+   throw Error("Um registro selecionado não tem data, hora ou valor válido.");
+  const saved={...row,valueC:amount,date,clock,kind,
+    origin:card.querySelector('[name="origin"]').value.trim(),
+    destination:card.querySelector('[name="destination"]').value.trim()};
+  if(!window.RodaOCR.acceptedForShift(saved,target)){
+   throw Error("Registro de "+when(date)+" "+clock+" fora do turno selecionado. Desmarque ou escolha outro turno.");
+  }
+  if(saved.duplicate)throw Error("Há possível duplicidade selecionada.");
+  selected.push(saved);
+ }
+ return selected;
+}
+async function captureCommit(){
+ if(batchBusy)return;
+ const target=batchTarget();if(!target){notify("Selecione um turno válido.",true);return}
+ let rows;try{rows=captureReviewedValues()}catch(e){notify(e.message,true);return}
+ if(!rows.length){notify("Selecione ao menos um registro conferido.",true);return}
+ const positive=rows.filter(r=>r.valueC>0),negative=rows.filter(r=>r.valueC<0);
+ const replaceManual=Boolean(out.querySelector("#captureReplaceManual")?.checked);
+ const manualTotal=(target.rides||[]).filter(r=>r.source!=="ocr99").reduce((n,r)=>n+(Number(r.valueC)||0),0);
+ const p=positive.reduce((n,r)=>n+r.valueC,0);
+ const msg="Confirmar importação de "+positive.length+" ganho(s) ("+BRL(p)+") e "+negative.length+" ajuste(s) apenas para conferência?"+
+ (manualTotal&&!replaceManual?"\nAtenção: lançamentos manuais existentes ("+BRL(manualTotal)+") serão mantidos e podem duplicar valores.":"")+
+ (replaceManual?"\nLançamentos manuais do turno serão SUBSTITUÍDOS.":"")+
+ "\nA quilometragem do odômetro permanecerá intacta.";
+ if(!confirm(msg))return;
+ batchBusy=true;
+ let paths=[];
+ try{
+  // Before altering the ledger, attach the selected images to the private bucket.
+  for(let i=0;i<batchFiles.length;i++){
+   const file=batchFiles[i];
+   if(!file.type.startsWith("image/")||file.size>10485760)throw Error("Imagem inválida ou maior que 10 MB: "+file.name);
+   const ext=file.type==="image/png"?"png":file.type==="image/webp"?"webp":"jpg";
+   const path=account.id+"/"+target.id+"/99-batch/"+rid()+"."+ext;
+   const {error}=await client.storage.from("driver-receipts").upload(path,file,{upsert:false,contentType:file.type});
+   if(error)throw error;
+   paths[i]={path,name:file.name};
+  }
+  const old=target.rides||[];
+  const fp=new Set(old.map(r=>r.ocrFingerprint).filter(Boolean));
+  const accepted=rows.filter(r=>!fp.has(r.fingerprint));
+  if(!accepted.length)throw Error("Todos os registros já foram importados anteriormente.");
+  const added=accepted.filter(r=>r.valueC>0).map(r=>({
+   id:rid(),clock:r.clock,at:r.date+"T"+r.clock+":00",valueC:r.valueC,
+   platform:"99",platformFeeC:0,km:null,
+   source:"ocr99",kind:r.kind,payment:r.payment,origin:r.origin||"",destination:r.destination||"",
+   routeEstimateKm:r.routeEstimateKm??null,kmSource:r.routeEstimateKm!=null?"OSRM estimado":null,
+   ocrFingerprint:r.fingerprint,
+   evidence:r.fileIndex==null?null:(paths[r.fileIndex]||null)
+  }));
+  const adjustment=accepted.filter(r=>r.valueC<0).map(r=>({id:rid(),date:r.date,clock:r.clock,amountC:r.valueC,kind:r.kind,
+   status:"pendente_conciliacao",source:"ocr99",ocrFingerprint:r.fingerprint,evidence:paths[r.fileIndex]||null}));
+  if(!added.length&&!adjustment.length)throw Error("Nenhum lançamento novo foi identificado.");
+  const succeeded=await save(d=>{
+   const shift=d.shifts.find(s=>s.id===target.id);
+   if(!shift)throw Error("Turno não encontrado. Recarregue os dados.");
+   const remaining=(shift.rides||[]).filter(r=>!replaceManual||r.source==="ocr99");
+   shift.rides=[...remaining,...added];
+   shift.importedAdjustments=[...(shift.importedAdjustments||[]),...adjustment];
+   shift.screenshots=[...(shift.screenshots||[]),...paths.filter(Boolean)];
+   shift.grossC=sumRide(shift);
+   shift.reportedTrips=shift.rides.filter(r=>r.kind!=="recompensa").length;
+   // Keep odometer-based km. Never overwrite s.km with a shortest-route estimate.
+   if(shift.odoEnd==null)shift.km=0;
+  });
+  if(!succeeded)throw Error("Falha ao salvar os lançamentos; arquivos enviados serão removidos.");
+  batchRows=[];batchFiles=[];batchTargetId=target.id;
+  screenName="turno";render();notify("Ganhos importados, revisados e anexados. Confira o fechamento financeiro.");
+ }catch(e){
+  if(paths.length)await client.storage.from("driver-receipts").remove(paths.filter(Boolean).map(x=>x.path));
+  notify("Importação não concluída: "+e.message,true);
+ }finally{batchBusy=false}
+}
+const capturePreviousRender=render;
+render=function(){if(screenName==="captura"&&account&&finance){mount(capturePage());return}return capturePreviousRender()};
+const capturePreviousTurns=turns;
+turns=function(){
+ return '<button type="button" class="btn block capture-launch" data-go="captura">▧ Importar vários prints da 99</button>'+
+ capturePreviousTurns();
+};
+const capturePreviousBind=bind;
+bind=function(){
+ capturePreviousBind();
+ const t=out.querySelector("#captureTarget");
+ t?.addEventListener("change",()=>{batchTargetId=t.value;render()});
+ const fileInput=out.querySelector("#captureImages");
+ fileInput?.addEventListener("change",()=>{
+  const input=[...fileInput.files];
+  if(input.length>20){notify("Selecione até 20 prints por vez.",true);return}
+  batchFiles=input;captureSetProgress(batchFiles.length+" arquivo(s) selecionado(s). Toque em Ler.");
+ });
+ out.querySelector("#captureReadImages")?.addEventListener("click",captureReadImages);
+ out.querySelector("#captureReadText")?.addEventListener("click",captureReadPasted);
+ out.querySelector("#captureCommit")?.addEventListener("click",captureCommit);
+ out.querySelectorAll("[data-estimate-route]").forEach(btn=>btn.addEventListener("click",()=>routeEstimate(Number(btn.dataset.estimateRoute))));
+ out.querySelector("#captureLoadDrafts")?.addEventListener("click",()=>{
+  const drafts=finance.screenshotDrafts||[];
+  const target=finance.shifts.find(s=>s.date==="2026-10-26");if(target)batchTargetId=target.id;
+  captureMerge(drafts.map(x=>({...x,source:"Prévia do chat, sem arquivo anexado",uncertain:true,fileIndex:null})));
+  render();notify("Prévia carregada. Confira os valores e anexe os prints originais se desejar.");
+ });
+};
+
 start();
 })();
