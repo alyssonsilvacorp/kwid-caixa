@@ -4,7 +4,7 @@ const vm=require("node:vm");
 const assert=require("node:assert/strict");
 let code=readFileSync("app.js","utf8");
 assert.match(code,/start\(\);\s*\}\)\(\);\s*$/);
-code=code.replace(/start\(\);\s*\}\)\(\);\s*$/,'globalThis.__test={defaults,normalize,compute,activeTurn,shiftRides,kmRide,sumRide,guessAmounts,datetimeLocal,weekBounds,weeklyGoalState,weeklyGoalCard,projectSummary,projectItemPaid,projectComboSummaries,personalSummary,urgentState,setFinance:(v)=>finance=v};})();');
+code=code.replace(/start\(\);\s*\}\)\(\);\s*$/,'globalThis.__test={defaults,normalize,compute,activeTurn,shiftRides,kmRide,sumRide,guessAmounts,datetimeLocal,weekBounds,weeklyGoalState,weeklyGoalCard,projectSummary,projectItemPaid,projectComboSummaries,personalSummary,urgentState,fuelPurchaseSummary,setFinance:(v)=>finance=v};})();');
 const root={innerHTML:""},toast={classList:{add(){},remove(){}},style:{},textContent:""};
 const sandbox={document:{getElementById:id=>id==="app"?root:toast},window:{addEventListener(){}},Intl,Date,Number,String,Object,Array,Math,crypto:{randomUUID:()=>"unit-test-id"},console,setTimeout,clearTimeout};
 vm.runInNewContext(code,sandbox,{timeout:5000});
@@ -223,6 +223,29 @@ assert.equal(t.compute().personal,originalPersonal);
 assert.equal(t.compute().gross,17594);
 u.screenshotDrafts=[{id:"draft",date:"2026-10-26",valueC:18500}];
 assert.equal(t.compute().gross,17594); // Unapproved OCR rows NEVER enter finances.
+// Fuel purchases represent cash used at the station, NOT a second subtraction
+// from kilometer-estimated fuel consumption, car reserve, or personal split.
+const tank=t.defaults();
+tank.goals=[];tank.settings.driverPct=50;
+tank.shifts=[{id:"shift",date:"2026-10-27",status:"closed",km:100,grossC:19000,kmPerL:13,fuelPriceC:665,wearPerKmC:15,otherC:0}];
+t.setFinance(tank);
+const fuelBefore=t.compute();
+const reserveBefore=t.projectSummary().available;
+tank.fuelPurchases=[
+ {id:"fill30",date:"2026-10-27",amountC:3000,fundingSource:"cash_99",liters:null,odometer:null},
+ {id:"fill70",date:"2026-10-27",amountC:7000,fundingSource:"cash_99",liters:null,odometer:null}
+];
+assert.equal(t.fuelPurchaseSummary().totalC,10000);
+assert.equal(t.fuelPurchaseSummary().count,2);
+assert.equal(t.compute().gross,fuelBefore.gross);
+assert.equal(t.compute().fuel,fuelBefore.fuel);
+assert.equal(t.compute().result,fuelBefore.result);
+assert.equal(t.compute().car,fuelBefore.car);
+assert.equal(t.projectSummary().available,reserveBefore);
+assert.equal(tank.expenses.length,0);
+const preserved=t.normalize(tank);
+assert.equal(preserved.fuelPurchases.length,2);
+assert.equal(preserved.fuelPurchases.reduce((n,x)=>n+x.amountC,0),10000);
 t.setFinance(d);
 const parsed=t.guessAmounts("Valor da corrida R$ 22,50 e percurso de 9,4 km");
 assert.equal(parsed.money,"22,50");
