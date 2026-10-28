@@ -4,7 +4,7 @@ const vm=require("node:vm");
 const assert=require("node:assert/strict");
 let code=readFileSync("app.js","utf8");
 assert.match(code,/start\(\);\s*\}\)\(\);\s*$/);
-code=code.replace(/start\(\);\s*\}\)\(\);\s*$/,'globalThis.__test={defaults,normalize,compute,activeTurn,shiftRides,kmRide,sumRide,guessAmounts,datetimeLocal,weekBounds,weeklyGoalState,weeklyGoalCard,projectSummary,projectItemPaid,projectComboSummaries,personalSummary,urgentState,fuelPurchaseSummary,setFinance:(v)=>finance=v};})();');
+code=code.replace(/start\(\);\s*\}\)\(\);\s*$/,'globalThis.__test={defaults,normalize,compute,activeTurn,shiftRides,kmRide,sumRide,guessAmounts,datetimeLocal,weekBounds,weeklyGoalState,weeklyGoalCard,projectSummary,projectItemPaid,projectComboSummaries,personalSummary,urgentState,fuelPurchaseSummary,pendingOdometerSummary,setFinance:(v)=>finance=v};})();');
 const root={innerHTML:""},toast={classList:{add(){},remove(){}},style:{},textContent:""};
 const sandbox={document:{getElementById:id=>id==="app"?root:toast},window:{addEventListener(){}},Intl,Date,Number,String,Object,Array,Math,crypto:{randomUUID:()=>"unit-test-id"},console,setTimeout,clearTimeout};
 vm.runInNewContext(code,sandbox,{timeout:5000});
@@ -246,6 +246,26 @@ assert.equal(tank.expenses.length,0);
 const preserved=t.normalize(tank);
 assert.equal(preserved.fuelPurchases.length,2);
 assert.equal(preserved.fuelPurchases.reduce((n,x)=>n+x.amountC,0),10000);
+// Gains proven by screenshots stay visible but cannot generate imaginary car reserve
+// when the driver has not supplied work odometer (personal travel is mixed in).
+const undetermined=t.defaults();undetermined.goals=[];
+undetermined.shifts=[
+ {id:"morning",date:"2026-10-27",status:"closed",financialStatus:"pending_odometer",grossC:10522,km:null,reportedTrips:6},
+ {id:"evening",date:"2026-10-27",status:"closed",financialStatus:"pending_odometer",grossC:10499,km:null,odoEnd:39988,reportedTrips:9}
+];
+t.setFinance(undetermined);
+assert.equal(t.pendingOdometerSummary().total,21021);
+assert.equal(t.pendingOdometerSummary().trips,15);
+assert.equal(t.compute().gross,0);
+assert.equal(t.compute().km,0);
+assert.equal(t.compute().car,0);
+assert.equal(t.projectSummary().available,0);
+// Once actual work KM is confirmed, a shift can contribute to calculations.
+undetermined.shifts[0].financialStatus="verified";
+undetermined.shifts[0].km=42;
+undetermined.shifts[0].kmPerL=13;undetermined.shifts[0].fuelPriceC=665;undetermined.shifts[0].wearPerKmC=15;
+assert.equal(t.compute().gross,10522);
+assert.equal(t.pendingOdometerSummary().total,10499);
 t.setFinance(d);
 const parsed=t.guessAmounts("Valor da corrida R$ 22,50 e percurso de 9,4 km");
 assert.equal(parsed.money,"22,50");
