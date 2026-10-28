@@ -30,6 +30,7 @@ function normalize(raw){
 function compute(){
  const d=finance,a={gross:0,fuel:0,wear:0,extraShifts:0,packages:0,extra:0,km:0,mins:0,days:0};
  for(const x of d.shifts){
+  if(x.financialStatus==="pending_odometer")continue; // Earnings verified from prints; no fabricated operating profit or car reserves before real KM.
   const dist=Number(x.km)||0;a.km+=dist;a.gross+=Number(x.grossC)||0;
   a.fuel+=x.kmPerL>0?Math.round(dist/x.kmPerL*x.fuelPriceC):0;a.wear+=Math.round(dist*(Number(x.wearPerKmC)||0));a.extraShifts+=Number(x.otherC)||0;
   if(x.start&&x.end){const [h,m]=x.start.split(":").map(Number),[eh,em]=x.end.split(":").map(Number);let t=eh*60+em-h*60-m;a.mins+=t>0?t:t+1440;}
@@ -1530,6 +1531,34 @@ bind=function(){
   }
  }));
 };
+
+
+/* Screenshot reconciliations may contain verified gross earnings but no reliable
+   odometer intervals. Show them prominently; do not recognize profit/car reserve
+   until real work KM can be reconciled without personal miles. */
+function pendingOdometerSummary(d=finance){
+ const pending=(d?.shifts||[]).filter(x=>x.financialStatus==="pending_odometer");
+ return {pending,total:pending.reduce((a,x)=>a+(Number(x.grossC)||0),0),
+  trips:pending.reduce((a,x)=>a+(Number(x.reportedTrips)||0),0)};
+}
+function pendingOdometerPanel(){
+ const p=pendingOdometerSummary();
+ if(!p.pending.length)return "";
+ return '<section class="card reconciliation-pending" id="reconciliationPending">'+
+ '<div class="section-overline">CONCILIAÇÃO PENDENTE · 99</div>'+
+ '<h2>Faturamento dos prints: '+BRL(p.total)+'</h2>'+
+ '<p class="muted">Ganhos confirmados no histórico, mas faltam os quilômetros de trabalho. O lucro, a reserva do Kwid e o resultado por KM destes períodos não foram calculados; nenhum KM pessoal foi presumido.</p>'+
+ p.pending.map(x=>
+ '<div class="reconciliation-part"><div class="row"><b>'+esc(x.periodLabel||"Período da 99")+'</b><strong>'+BRL(x.grossC)+'</strong></div>'+
+ '<small>'+(x.firstReceiptClock&&x.lastReceiptClock?'Registros entre '+esc(x.firstReceiptClock)+' e '+esc(x.lastReceiptClock):"Horários de trabalho pendentes")+
+ ' · '+Number(x.reportedTrips||0)+' corrida(s) · KM de trabalho pendente'+
+ (x.odoEnd!=null?' · odômetro observado '+Number(x.odoEnd).toLocaleString("pt-BR")+' km':"")+'</small></div>').join("")+
+ '<p class="field-hint">Pacote de R$ 73,99 lançado somente uma vez. Abastecimentos de R$ 30 + R$ 70 são movimentações de caixa separadas. Se você não tiver os KM iniciais, não invente valores.</p></section>';
+}
+const pendingPreviousHome=home;
+home=function(){return pendingOdometerPanel()+pendingPreviousHome()};
+const pendingPreviousTurns=turns;
+turns=function(){return pendingOdometerPanel()+pendingPreviousTurns()};
 
 start();
 })();
