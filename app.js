@@ -698,7 +698,7 @@ let editCarItemId="",editCarPaymentId="",newPaymentItemId="";
 const projectCategories=[["mecanica","Mecânica"],["pneus","Pneus"],["iluminacao","Iluminação"],["exterior","Exterior"],["interior","Interior"]];
 const projectStates=[["planejado","Planejado"],["reservando","Reservando"],["comprado","Comprado"],["instalado","Instalado"],["cancelado","Cancelado"]];
 const projectCombos=[
- {id:"seguranca",title:"1 · Pneus e mecânica",priority:1,desc:"Prioridade máxima: pneus; duto somente após diagnóstico e compatibilidade."},
+ {id:"seguranca",title:"1 · Segurança e reparos urgentes",priority:1,desc:"Inspecionar a batida traseira, avaliar fixações e sensores; priorizar pneus e mecânica. Orçamentos sujeitos à confirmação."},
  {id:"praticidade",title:"2 · Tecnologia e praticidade",priority:2,desc:"Multimídia, tapetes e carregador úteis no dia a dia."},
  {id:"exterior",title:"3 · Visual externo",priority:3,desc:"Calotas, antena e película — sem trocar rodas ou instalar frisos."},
  {id:"interior",title:"4 · Interior e conforto",priority:4,desc:"Capas, volante e iluminação ambiente discreta."},
