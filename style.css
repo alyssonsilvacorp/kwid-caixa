@@ -345,3 +345,15 @@ body:has(.auth-premium){background:radial-gradient(ellipse 67% 55% at 50% 12%,#1
 .capture-gallery-shift{border-top:1px solid #ffffff20;margin-top:12px;padding-top:12px;display:flex;flex-wrap:wrap;gap:8px}
 .capture-gallery-shift h3{font-size:12px;color:#e1f1e4;width:100%;margin:0}
 .capture-gallery-shift button{max-width:100%;overflow:hidden;text-overflow:ellipsis}
+
+
+/* Verified screenshot gross with unconfirmed work odometer: keep clearly separate from P&L. */
+.reconciliation-pending{background:linear-gradient(140deg,#252d35,#1c2229);border:1px solid #8b9daf;margin:14px 0}
+.reconciliation-pending .section-overline{font-size:10px;color:#b5cee0;letter-spacing:1px;font-weight:800}
+.reconciliation-pending h2{font-size:21px;color:#e8f5ff;margin:9px 0 7px}
+.reconciliation-pending p{font-size:11px;line-height:1.6}
+.reconciliation-part{padding:11px 0;border-top:1px solid #ffffff1e}
+.reconciliation-part .row{gap:10px;align-items:center}
+.reconciliation-part b{font-size:13px}
+.reconciliation-part strong{font-size:15px;color:#9ae8c2}
+.reconciliation-part small{display:block;color:#aabdc9;margin-top:6px;line-height:1.5;font-size:11px}
